@@ -5,6 +5,9 @@
 #include "nRF24L01.h"
 #include "RF24.h"
 
+#define VCC _BV(MUX3) | _BV(MUX2) | _BV(MUX1)
+#define EXTERNAL 0x01
+
 // Time (ms) to allow the filters to settle before sending data
 const int FILTER_SETTLE_TIME = 5000;
 
@@ -67,16 +70,18 @@ int settled = 0;
 
 
 // Get the battery voltage
-// TODO
-int readVcc() {
-    ADMUX = _BV(REFS0) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1);
+// source is either VCC (battery) or EXTERNAL (external voltage) or a value for the MUX.
+// See http://openenergymonitor.blogspot.it/2012/08/low-level-adc-control-admux.html
+int readV(int mux) {
+    // Use internal reference. MUX = 1110 is internal 1.1V
+    ADMUX = _BV(REFS0) | mux;
 
     delay(2); // Wait for Vref to settle
     ADCSRA |= _BV(ADSC); // Convert
     while (bit_is_set(ADCSRA,ADSC));
     result = ADCL;
     result |= ADCH << 8;
-    result = 1126400L / result; //1100mV*1024 ADC steps http://openenergymonitor.org/emon/node/1186
+    result = 1126400L / result; // 1100mV / 1024 ADC steps http://openenergymonitor.org/emon/node/1186
     return result;
 }
 
@@ -101,12 +106,6 @@ int readI(int samples_number) {
     }
 
     return ICAL * sqrt(sum_I / samples_number);
-}
-
-// Get the measured voltage
-int readV() {
-    // TODO
-    return -1;
 }
 
 // Send the data through nRF
@@ -216,11 +215,11 @@ void loop() {
     if(settled) {
         nrf.intensity = readI(SAMPLES_NUMBER_I);
         if(0 == VOLTAGE) {
-            nrf.voltage = readV();
+            nrf.voltage = readV(EXTERNAL);
         } else {
             nrf.voltage = VOLTAGE;
         }
-        nrf.battery = readVcc();
+        nrf.battery = readV(VCC);
 
         if(DEBUG) {
             Serial.print(nrf.itensity);
