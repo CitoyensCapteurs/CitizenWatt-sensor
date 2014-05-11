@@ -19,6 +19,10 @@ const int SERIAL_SPEED = 9600;
 // Reduce it to improve reliability
 const int NRF_SPEED = RF24_1MBPS;
 
+// PreAmplifier level for the nRF
+// Lower this to reduce power consumption. This will reduce range.
+const int NRF_PA_LEVEL = RF24_PA_MAX;
+
 // Channel for the nrf module
 // 76 is default safe channel in RF24
 const int NRF_CHANNEL = 76;
@@ -40,7 +44,7 @@ const int VOLTAGE_PIN = 0;
 const double ICAL = 1;
 
 // Radio pipe addresses for the 2 nodes to communicate.
-const uint64_t pipes[2] = {0xF0F0F0F0E1LL, 0xF0F0F0F0D2LL};
+const uint64_t pipes[2] = { 0xF0F0F0F0E1LL, 0xF0F0F0F0D2LL };
 
 
 // Struct to send RF data
@@ -171,6 +175,12 @@ void setup() {
         if(NRF_SPEED == RF24_250KBPS) Serial.print("250 kbp/s");
         if(NRF_SPEED == RF24_1MBPS) Serial.print("1 mbp/s");
         if(NRF_SPEED == RF24_2MBPS) Serial.print("2 mbp/s");
+        Serial.print("nRf PA level: ");
+        if(NRF_PA_LEVEL == RF24_PA_MIN) Serial.print("-18dBm");
+        if(NRF_PA_LEVEL == RF24_PA_LOW) Serial.print("-12dBm");
+        if(NRF_PA_LEVEL == RF24_HIGH) Serial.print("-6dBm");
+        if(NRF_PA_LEVEL == RF24_MAX) Serial.print("0dBm");
+        Serial.println("===============");
         Serial.println("Starting measuring.");
         Serial.println("I\tV\tBattery");
     }
@@ -182,13 +192,16 @@ void setup() {
     radio.setRetries(15, 15);
     // Reduce payload size to improve reliability
     radio.setPayloadSize(8);
-    // TODO : setPALevel ?
     // Set the datarate
     radio.setDataRate(NRF_SPEED);
+    // Use the largest CRC
+    radio.setCRCLength(RF24_CRC_16);
+    // Ensure auto ACK is enabled
+    radio.setAutoAck(1);
+    // Use the best PA level
+    radio.setPALevel(NRF_PA_LEVEL);
 
-    // TODO
     radio.openWritingPipe(pipes[0]);
-    radio.openReadingPipe(1,pipes[1]);
 
     // Enable anti-crash (restart) watchdog
     wdt_enable(WDTO_8S);
