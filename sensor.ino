@@ -1,8 +1,13 @@
 /*
- * TODO : License and cie
+ * NEED RF24 lib from https://github.com/TMRh20/RF24/
+ * TODO :
+ * License and cie
+ * Duplicate code ?
  */
+#include <SPI.h>
 #include <avr/wdt.h>
 #include <avr/sleep.h>
+#include <avr/power.h>
 #include "nRF24L01.h"
 #include "RF24.h"
 
@@ -21,7 +26,7 @@ const int SERIAL_SPEED = 9600;
 // Speed for the nrf module
 // RF24_250KBPS / RF24_1MBPS / RF24_2MBPS
 // Reduce it to improve reliability
-const int NRF_SPEED = RF24_1MBPS;
+const rf24_datarate_e NRF_SPEED = RF24_1MBPS;
 
 // PreAmplifier level for the nRF
 // Lower this to reduce power consumption. This will reduce range.
@@ -45,7 +50,7 @@ const int CURRENT_PIN = A0;
 const int VOLTAGE_PIN = 0;
 
 // Calibration factor for the intensity
-const double ICAL = 1;
+const double ICAL = 111.1;
 
 // Radio pipe addresses for the 2 nodes to communicate.
 // TODO : Change address
@@ -64,7 +69,7 @@ typedef struct {
 PayloadTX nrf = {0, 0, 0};
 
 // Set up nrf24L01 radio
-RF24 radio(9,10)
+RF24 radio(9,10);
 
 // Wether we are ready to send the measure or not.
 // Store it because millis reinitialize after 50 days.
@@ -78,6 +83,7 @@ int previous_ADCSRA = 0;
 // source is either VCC (battery) or EXTERNAL (external voltage) or a value for the MUX.
 // See http://openenergymonitor.blogspot.it/2012/08/low-level-adc-control-admux.html
 int readV(int mux) {
+    int result = 0;
     // Use internal reference. MUX = 1110 is internal 1.1V
     ADMUX = _BV(REFS0) | mux;
 
@@ -93,7 +99,7 @@ int readV(int mux) {
 // Get the measured intensity (root mean squared)
 // samples_number is the number of samples for the measurement
 // http://openenergymonitor.org/emon/buildingblocks/digital-filters-for-offset-removal
-// TODO
+// TODO : Use integer arithmetic
 int readI(int samples_number) {
     int sample_I = 0;
     int last_sample_I = 0;
@@ -107,7 +113,7 @@ int readI(int samples_number) {
         last_filtered_I = filtered_I;
         filtered_I = 0.996 * (last_filtered_I + sample_I-last_sample_I);
 
-        sumI += filtered_I * filtered_I;
+        sum_I += filtered_I * filtered_I;
     }
 
     return ICAL * sqrt(sum_I / samples_number);
@@ -115,32 +121,29 @@ int readI(int samples_number) {
 
 // Send the data through nRF
 // Auto ACK is enabled so if ok is true, transmission was successful 
-// TODO : Use https://github.com/TMRh20/RF24
 int sendRfData() {
+    radio.powerUp();
     bool ok = radio.write(&nrf, sizeof(PayloadTX));
 
     if(DEBUG) {
         if(ok) {
-            Serial.println("Data sent through nRF.")
+            Serial.println("Data sent through nRF.");
         } else {
             Serial.println("Data sending failed…");
         }
     }
+    radio.powerDown();
 
     // If unable to send data, return -1
     return (int) ok;
 }
 
-// Go to suspend for param seconds
+// Go to suspend for 8 seconds
 // http://www.disk91.com/2014/technology/hardware/arduino-atmega328p-low-power-consumption/
-// TODO
-void suspend(int seconds) {
+void suspend() {
     // Clear various "reset" flags
     MCUSR = 0;     
-    // Allow changes, disable reset, enable Watchdog interrupt
-    WDTCSR = bit (WDCE) | bit (WDE);
-    // set interval (see datasheet p55)
-    WDTCSR = bit (WDIE) | bit (WDP2) | bit (WDP1);    // 128K cycles = approximativly 1 second
+    wdt_enable(WDTO_8S);
     wdt_reset();  // start watchdog timer
     set_sleep_mode(SLEEP_MODE_PWR_DOWN); // prepare for powerdown
     sleep_enable();
@@ -163,9 +166,22 @@ void suspend(int seconds) {
 
 // Recover from suspend mode
 void wakeup() {
+    wdt_reset();
     power_spi_enable();
     if(DEBUG) {
         power_usart0_enable();
+    }
+    else {
+        power_usart0_disable();
+    }
+    power_twi_disable();
+    // Disable digital input buffer on AIN1/0
+    DIDR1 = (1<<AIN1D)|(1<<AIN0D);
+    disableBOD();
+    // Set everything as OUTPUT LOW
+    for(byte i = 0; i <= A5; i++) {
+        pinMode (i, OUTPUT);
+        digitalWrite (i, LOW);
     }
     power_timer0_enable();
     power_timer1_enable();
@@ -190,9 +206,16 @@ void setup() {
     if(!DEBUG) {
         power_usart0_disable();
     }
+    //
     // Disable digital input buffer on AIN1/0
     DIDR1 = (1<<AIN1D)|(1<<AIN0D);
     disableBOD();
+
+    // Set everything as OUTPUT LOW
+    for(byte i = 0; i <= A5; i++) {
+        pinMode (i, OUTPUT);
+        digitalWrite (i, LOW);
+    }
 
     if(DEBUG) {
         Serial.begin(SERIAL_SPEED);
@@ -201,14 +224,16 @@ void setup() {
         Serial.println("Configuration:");
         Serial.println("===============");
         Serial.print("nRf speed: ");
-        if(NRF_SPEED == RF24_250KBPS) Serial.print("250 kbp/s");
-        if(NRF_SPEED == RF24_1MBPS) Serial.print("1 mbp/s");
-        if(NRF_SPEED == RF24_2MBPS) Serial.print("2 mbp/s");
+        if(NRF_SPEED == RF24_250KBPS) Serial.print("250 kbps");
+        if(NRF_SPEED == RF24_1MBPS) Serial.print("1 mbps");
+        if(NRF_SPEED == RF24_2MBPS) Serial.print("2 mbps");
+        Serial.println();
         Serial.print("nRf PA level: ");
         if(NRF_PA_LEVEL == RF24_PA_MIN) Serial.print("-18dBm");
         if(NRF_PA_LEVEL == RF24_PA_LOW) Serial.print("-12dBm");
-        if(NRF_PA_LEVEL == RF24_HIGH) Serial.print("-6dBm");
-        if(NRF_PA_LEVEL == RF24_MAX) Serial.print("0dBm");
+        if(NRF_PA_LEVEL == RF24_PA_HIGH) Serial.print("-6dBm");
+        if(NRF_PA_LEVEL == RF24_PA_MAX) Serial.print("0dBm");
+        Serial.println();
         Serial.println("===============");
         Serial.println("Starting measuring.");
         Serial.println("I\tV\tBattery");
@@ -242,8 +267,8 @@ void loop() {
         settled = 1;
     }
 
+    nrf.intensity = readI(NUMBER_SAMPLES_I);
     if(settled) {
-        nrf.intensity = readI(SAMPLES_NUMBER_I);
         if(0 == VOLTAGE) {
             nrf.voltage = readV(EXTERNAL);
         } else {
@@ -252,17 +277,21 @@ void loop() {
         nrf.battery = readV(VCC);
 
         if(DEBUG) {
-            Serial.print(nrf.itensity);
+            Serial.print(nrf.intensity);
+            Serial.print("\t");
             Serial.print(nrf.voltage);
+            Serial.print("\t");
             Serial.print(nrf.battery);
+            Serial.print("\t");
             Serial.println();
         }
 
         // Send RF data
-        send_rf_data();
+        sendRfData();
+
+        // Go to power down mode
+        suspend();
+        sleep_disable();
+        wakeup();
     }
-    // Go to power down mode
-    suspend();
-    sleep_disable();
-    wakeup();
 }
