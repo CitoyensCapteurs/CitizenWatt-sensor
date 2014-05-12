@@ -2,7 +2,9 @@
  * NEED RF24 lib from https://github.com/TMRh20/RF24/
  * TODO :
  * License and cie
- * Duplicate code ?
+ * Desactivate more in depth : ADC and co
+ * Bug with sleep and serial
+ * nRF not working
  */
 #include <SPI.h>
 #include <avr/wdt.h>
@@ -13,6 +15,13 @@
 
 #define VCC _BV(MUX3) | _BV(MUX2) | _BV(MUX1)
 #define EXTERNAL 0x01
+
+#ifndef cbi
+#define cbi(sfr, bit) (_SFR_BYTE(sfr) &= ~_BV(bit))
+#endif
+#ifndef sbi
+#define sbi(sfr, bit) (_SFR_BYTE(sfr) |= _BV(bit))
+#endif
 
 // Time (ms) to allow the filters to settle before sending data
 const int FILTER_SETTLE_TIME = 5000;
@@ -56,6 +65,8 @@ const double ICAL = 111.1;
 // TODO : Change address
 const uint64_t pipe = 0xF0F0F0F0E1LL;
 
+// Watchdog state
+volatile boolean f_wdt=1;
 
 // Struct to send RF data
 typedef struct {
@@ -74,10 +85,6 @@ RF24 radio(9,10);
 // Wether we are ready to send the measure or not.
 // Store it because millis reinitialize after 50 days.
 int settled = 0;
-
-// Store previous value of ADCSRA
-int previous_ADCSRA = 0;
-
 
 // Get the battery voltage
 // source is either VCC (battery) or EXTERNAL (external voltage) or a value for the MUX.
@@ -138,85 +145,13 @@ int sendRfData() {
     return (int) ok;
 }
 
-// Go to suspend for 8 seconds
-// http://www.disk91.com/2014/technology/hardware/arduino-atmega328p-low-power-consumption/
-void suspend() {
-    // Clear various "reset" flags
-    MCUSR = 0;     
-    wdt_enable(WDTO_8S);
-    wdt_reset();  // start watchdog timer
-    set_sleep_mode(SLEEP_MODE_PWR_DOWN); // prepare for powerdown
-    sleep_enable();
 
-    previous_ADCSRA = ADCSRA;
-    ADCSRA = 0; //Disable ADC
-    ACSR = (1<<ACD); //Disable the analog comparator
-    DIDR0 = 0x3F; //Disable digital input buffers on all ADC0-ADC5 pins
-
-    power_spi_disable();
-    if(DEBUG) {
-        power_usart0_disable();
-    }
-    power_timer0_disable(); //Needed for delay and millis()
-    power_timer1_disable();
-    power_timer2_disable(); //Needed for asynchronous 32kHz operation
-
-    sleep_cpu ();   // power down !
-}
-
-// Recover from suspend mode
-void wakeup() {
-    wdt_reset();
-    power_spi_enable();
-    if(DEBUG) {
-        power_usart0_enable();
-    }
-    else {
-        power_usart0_disable();
-    }
-    power_twi_disable();
-    // Disable digital input buffer on AIN1/0
-    DIDR1 = (1<<AIN1D)|(1<<AIN0D);
-    disableBOD();
-    // Set everything as OUTPUT LOW
-    for(byte i = 0; i <= A5; i++) {
-        pinMode (i, OUTPUT);
-        digitalWrite (i, LOW);
-    }
-    power_timer0_enable();
-    power_timer1_enable();
-    power_timer2_enable();
-    power_adc_enable();
-    ADCSRA = previous_ADCSRA;
-    disableBOD(); // BOD is automatically restarted at wakeup
-}
-
-// Turn off brown-out enable in software
-void disableBOD() {
-    set_sleep_mode(SLEEP_MODE_IDLE);  
-    sleep_enable();
-    MCUCR = bit (BODS) | bit (BODSE); // turn on brown-out enable select
-    MCUCR = bit (BODS); // this must be done within 4 clock cycles of above
-    sleep_cpu();
-}
 
 void setup() {
-    // Disable non necessary functions on the arduino
-    power_twi_disable();
-    if(!DEBUG) {
-        power_usart0_disable();
-    }
-    //
-    // Disable digital input buffer on AIN1/0
-    DIDR1 = (1<<AIN1D)|(1<<AIN0D);
-    disableBOD();
-
-    // Set everything as OUTPUT LOW
-    for(byte i = 0; i <= A5; i++) {
+    /*for(byte i = 2; i <= A5; i++) {
         pinMode (i, OUTPUT);
         digitalWrite (i, LOW);
-    }
-
+    }*/
     if(DEBUG) {
         Serial.begin(SERIAL_SPEED);
         Serial.println("CitizenWatt sensor.");
@@ -259,39 +194,96 @@ void setup() {
 
     // Enable anti-crash (restart) watchdog
     wdt_enable(WDTO_8S);
+
+    // CPU Sleep Modes 
+    // SM2 SM1 SM0 Sleep Mode
+    // 0    0  0 Idle
+    // 0    0  1 ADC Noise Reduction
+    // 0    1  0 Power-down
+    // 0    1  1 Power-save
+    // 1    0  0 Reserved
+    // 1    0  1 Reserved
+    // 1    1  0 Standby(1)
+
+    cbi( SMCR,SE );      // sleep enable, power down mode
+    cbi( SMCR,SM0 );     // power down mode
+    sbi( SMCR,SM1 );     // power down mode
+    cbi( SMCR,SM2 );     // power down mode
+
+    setup_watchdog(9);
 }
 
 void loop() {
-    // Check that sensor is ready
-    if(!settled && millis() > FILTER_SETTLE_TIME) {
-        settled = 1;
-    }
-
-    nrf.intensity = readI(NUMBER_SAMPLES_I);
-    if(settled) {
-        if(0 == VOLTAGE) {
-            nrf.voltage = readV(EXTERNAL);
-        } else {
-            nrf.voltage = VOLTAGE;
-        }
-        nrf.battery = readV(VCC);
-
-        if(DEBUG) {
-            Serial.print(nrf.intensity);
-            Serial.print("\t");
-            Serial.print(nrf.voltage);
-            Serial.print("\t");
-            Serial.print(nrf.battery);
-            Serial.print("\t");
-            Serial.println();
+    if (f_wdt == 1) {  // wait for timed out watchdog / flag is set when a watchdog timeout occurs
+        // Check that sensor is ready
+        if(!settled && millis() > FILTER_SETTLE_TIME) {
+            settled = 1;
         }
 
-        // Send RF data
-        sendRfData();
+        nrf.intensity = readI(NUMBER_SAMPLES_I);
+        if(settled) {
+            f_wdt = 0; // reset flag
+            if(0 == VOLTAGE) {
+                nrf.voltage = readV(EXTERNAL);
+            } else {
+                nrf.voltage = VOLTAGE;
+            }
+            nrf.battery = readV(VCC);
 
-        // Go to power down mode
-        suspend();
-        sleep_disable();
-        wakeup();
+            if(DEBUG) {
+                Serial.print(nrf.intensity);
+                Serial.print("\t");
+                Serial.print(nrf.voltage);
+                Serial.print("\t");
+                Serial.print(nrf.battery);
+                Serial.print("\t");
+                Serial.println();
+            }
+
+            // Send RF data
+            sendRfData();
+            
+            //system_sleep();
+        }
     }
+}
+
+// Set system into the sleep state 
+// system wakes up when watchdog is timed out
+void system_sleep() {
+    cbi(ADCSRA,ADEN);                    // switch Analog to Digitalconverter OFF
+
+    set_sleep_mode(SLEEP_MODE_PWR_DOWN); // sleep mode is set here
+    sleep_enable();
+
+    sleep_mode();                        // System sleeps here
+
+    sleep_disable();                     // System continues execution here when watchdog timed out 
+    sbi(ADCSRA,ADEN);                    // switch Analog to Digitalconverter ON
+
+}
+
+//****************************************************************
+// 0=16ms, 1=32ms,2=64ms,3=128ms,4=250ms,5=500ms
+// 6=1 sec,7=2 sec, 8=4 sec, 9= 8sec
+void setup_watchdog(int ii) {
+    byte bb;
+    int ww;
+    if (ii > 9 ) ii=9;
+    bb=ii & 7;
+    if (ii > 7) bb|= (1<<5);
+    bb|= (1<<WDCE);
+    ww=bb;
+
+    MCUSR &= ~(1<<WDRF);
+    // start timed sequence
+    WDTCSR |= (1<<WDCE) | (1<<WDE);
+    // set new watchdog timeout value
+    WDTCSR = bb;
+    WDTCSR |= _BV(WDIE);
+}
+//****************************************************************  
+// Watchdog Interrupt Service / is executed when  watchdog timed out
+ISR(WDT_vect) {
+    f_wdt=1;  // set global flag
 }
