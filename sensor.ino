@@ -47,7 +47,8 @@ const int VOLTAGE_PIN = 0;
 const double ICAL = 1;
 
 // Radio pipe addresses for the 2 nodes to communicate.
-const uint64_t pipes[2] = { 0xF0F0F0F0E1LL, 0xF0F0F0F0D2LL };
+// TODO : Change address
+const uint64_t pipe = 0xF0F0F0F0E1LL;
 
 
 // Struct to send RF data
@@ -109,6 +110,7 @@ int readI(int samples_number) {
 }
 
 // Send the data through nRF
+// Auto ACK is enabled so if ok is true, transmission was successful 
 int sendRfData() {
     bool ok = radio.write(&nrf, sizeof(PayloadTX));
 
@@ -121,46 +123,15 @@ int sendRfData() {
     }
 
     // If unable to send data, return -1
-    if(!ok) {
-        return -1;
-    }
-
-    // Check for ACK response
-    // TODO : ACK
-    radio.startListening();
-
-    // Wait here until we get a response, or timeout (250ms)
-    unsigned long started_waiting_at = millis();
-    bool timeout = false;
-    while(!radio.available() && !timeout) {
-        if(millis() - started_waiting_at > 200) {
-            timeout = true;
-        }
-    }
-
-    if(timeout) {
-        Serial.println("Unable to send data through nRF. No ACK.");
-        return 1;
-    } else {
-        // Grab the response, compare, and send to debugging spew
-        unsigned long got_time;
-        radio.read( &got_time, sizeof(unsigned long) );
-
-        // Spew it
-        printf("Got response %lu, round-trip delay: %lu\n\r",got_time,millis()-got_time);
-        return 0;
-    }
+    return (int) ok;
 }
 
 // Go to suspend for param seconds
+// http://www.disk91.com/2014/technology/hardware/arduino-atmega328p-low-power-consumption/
 void suspend(int seconds) {
     // TODO
-    if (nrf.battery > 3300) {
-        for (int i=0; i<seconds; i++) {
-            delay(1000);
-            if (UNO) wdt_reset();
-        }
-    } else Sleepy::loseSomeTime(seconds*1000);
+    // + disable ADC and co
+//    Sleepy::loseSomeTime(seconds * 1000);
 }
 
 void setup() {
@@ -199,8 +170,8 @@ void setup() {
     radio.setAutoAck(1);
     // Use the best PA level
     radio.setPALevel(NRF_PA_LEVEL);
-
-    radio.openWritingPipe(pipes[0]);
+    // Open writing pipe
+    radio.openWritingPipe(pipe);
 
     // Enable anti-crash (restart) watchdog
     wdt_enable(WDTO_8S);
@@ -232,5 +203,5 @@ void loop() {
         send_rf_data();
     }
     // Go to power down mode
-    suspend(5);
+    // TODO : suspend(5);
 }
