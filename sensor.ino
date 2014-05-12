@@ -2,6 +2,7 @@
  * TODO : License and cie
  */
 #include <avr/wdt.h>
+#include <avr/sleep.h>
 #include "nRF24L01.h"
 #include "RF24.h"
 
@@ -69,6 +70,9 @@ RF24 radio(9,10)
 // Store it because millis reinitialize after 50 days.
 int settled = 0;
 
+// Store previous value of ADCSRA
+int previous_ADCSRA = 0;
+
 
 // Get the battery voltage
 // source is either VCC (battery) or EXTERNAL (external voltage) or a value for the MUX.
@@ -111,6 +115,7 @@ int readI(int samples_number) {
 
 // Send the data through nRF
 // Auto ACK is enabled so if ok is true, transmission was successful 
+// TODO : Use https://github.com/TMRh20/RF24
 int sendRfData() {
     bool ok = radio.write(&nrf, sizeof(PayloadTX));
 
@@ -128,13 +133,67 @@ int sendRfData() {
 
 // Go to suspend for param seconds
 // http://www.disk91.com/2014/technology/hardware/arduino-atmega328p-low-power-consumption/
+// TODO
 void suspend(int seconds) {
-    // TODO
-    // + disable ADC and co
-//    Sleepy::loseSomeTime(seconds * 1000);
+    // Clear various "reset" flags
+    MCUSR = 0;     
+    // Allow changes, disable reset, enable Watchdog interrupt
+    WDTCSR = bit (WDCE) | bit (WDE);
+    // set interval (see datasheet p55)
+    WDTCSR = bit (WDIE) | bit (WDP2) | bit (WDP1);    // 128K cycles = approximativly 1 second
+    wdt_reset();  // start watchdog timer
+    set_sleep_mode(SLEEP_MODE_PWR_DOWN); // prepare for powerdown
+    sleep_enable();
+
+    previous_ADCSRA = ADCSRA;
+    ADCSRA = 0; //Disable ADC
+    ACSR = (1<<ACD); //Disable the analog comparator
+    DIDR0 = 0x3F; //Disable digital input buffers on all ADC0-ADC5 pins
+
+    power_spi_disable();
+    if(DEBUG) {
+        power_usart0_disable();
+    }
+    power_timer0_disable(); //Needed for delay and millis()
+    power_timer1_disable();
+    power_timer2_disable(); //Needed for asynchronous 32kHz operation
+
+    sleep_cpu ();   // power down !
+}
+
+// Recover from suspend mode
+void wakeup() {
+    power_spi_enable();
+    if(DEBUG) {
+        power_usart0_enable();
+    }
+    power_timer0_enable();
+    power_timer1_enable();
+    power_timer2_enable();
+    power_adc_enable();
+    ADCSRA = previous_ADCSRA;
+    disableBOD(); // BOD is automatically restarted at wakeup
+}
+
+// Turn off brown-out enable in software
+void disableBOD() {
+    set_sleep_mode(SLEEP_MODE_IDLE);  
+    sleep_enable();
+    MCUCR = bit (BODS) | bit (BODSE); // turn on brown-out enable select
+    MCUCR = bit (BODS); // this must be done within 4 clock cycles of above
+    sleep_cpu();
 }
 
 void setup() {
+    // Disable non necessary functions on the arduino
+    power_twi_disable();
+    if(!DEBUG) {
+        power_usart0_disable();
+    }
+    // Disable digital input buffer on AIN1/0
+    DIDR1 = (1<<AIN1D)|(1<<AIN0D);
+    disableBOD();
+
     if(DEBUG) {
         Serial.begin(SERIAL_SPEED);
         Serial.println("CitizenWatt sensor.");
@@ -203,5 +262,7 @@ void loop() {
         send_rf_data();
     }
     // Go to power down mode
-    // TODO : suspend(5);
+    suspend();
+    sleep_disable();
+    wakeup();
 }
