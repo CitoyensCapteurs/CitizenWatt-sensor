@@ -30,7 +30,7 @@ const rf24_datarate_e NRF_SPEED = RF24_1MBPS;
 
 // PreAmplifier level for the nRF
 // Lower this to reduce power consumption. This will reduce range.
-const int NRF_PA_LEVEL = RF24_PA_MAX;
+const rf24_pa_dbm_e NRF_PA_LEVEL = RF24_PA_MAX;
 
 // Channel for the nrf module
 // 76 is default safe channel in RF24
