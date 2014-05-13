@@ -1,11 +1,19 @@
-/*
- * NEED RF24 lib from https://github.com/TMRh20/RF24/
- * TODO :
- * License and cie
- * Desactivate more in depth : ADC and co
- * Bug with sleep and serial
- * nRF not working
+/* CitizenWatt sensor code
+ *
+ * TODO:
+ *      License and cie
+ *      Deactivate TWI, BOD
+ *      Bug with sleep and serial ?
+ *      nRF not working ?
+ *      Various TODOs in file
+ *
+ * NEED:
+ *      RF24 lib from https://github.com/TMRh20/RF24/
+ *
+ * THANKS:
+ *      Code for the sleep mode from http://interface.khm.de/index.php/lab/experiments/sleep_watchdog_battery/
  */
+
 #include <SPI.h>
 #include <avr/wdt.h>
 #include <avr/sleep.h>
@@ -13,15 +21,19 @@
 #include "nRF24L01.h"
 #include "RF24.h"
 
-#define VCC _BV(MUX3) | _BV(MUX2) | _BV(MUX1)
-#define EXTERNAL 0x01
-
 #ifndef cbi
 #define cbi(sfr, bit) (_SFR_BYTE(sfr) &= ~_BV(bit))
 #endif
 #ifndef sbi
 #define sbi(sfr, bit) (_SFR_BYTE(sfr) |= _BV(bit))
 #endif
+
+#define VCC _BV(MUX3) | _BV(MUX2) | _BV(MUX1)
+#define EXTERNAL 0x01
+
+/***************************************************************
+ *      CHANGE BELOW THIS LINE TO EDIT CONFIG
+****************************************************************/
 
 // Time (ms) to allow the filters to settle before sending data
 const int FILTER_SETTLE_TIME = 5000;
@@ -62,11 +74,15 @@ const int VOLTAGE_PIN = 0;
 const double ICAL = 111.1;
 
 // Radio pipe addresses for the 2 nodes to communicate.
-// TODO : Change address
-const uint64_t pipe = 0xF0F0F0F0E1LL;
+const uint64_t pipe = 0xE056D446D0LL;
+
+
+/***************************************************************
+ *                      GLOBAL VARS 
+****************************************************************/
 
 // Watchdog state
-volatile boolean f_wdt=1;
+volatile boolean f_wdt = 1;
 
 // Struct to send RF data
 typedef struct {
@@ -74,7 +90,6 @@ typedef struct {
     int voltage;
     int battery;
 } PayloadTX;
-
 
 // Next measurement to be sent
 PayloadTX nrf = {0, 0, 0};
@@ -86,9 +101,16 @@ RF24 radio(9,10);
 // Store it because millis reinitialize after 50 days.
 int settled = 0;
 
-// Get the battery voltage
-// source is either VCC (battery) or EXTERNAL (external voltage) or a value for the MUX.
-// See http://openenergymonitor.blogspot.it/2012/08/low-level-adc-control-admux.html
+
+/***************************************************************
+ *                       FUNCTIONS
+****************************************************************/
+
+/* Returns the battery voltage
+ * 
+ * params : source is either VCC (battery) or EXTERNAL (external voltage) or a value for the MUX register
+ * See http://openenergymonitor.blogspot.it/2012/08/low-level-adc-control-admux.html
+ */
 int readV(int mux) {
     int result = 0;
     // Use internal reference. MUX = 1110 is internal 1.1V
@@ -103,10 +125,14 @@ int readV(int mux) {
     return result;
 }
 
-// Get the measured intensity (root mean squared)
-// samples_number is the number of samples for the measurement
-// http://openenergymonitor.org/emon/buildingblocks/digital-filters-for-offset-removal
-// TODO : Use integer arithmetic
+
+/* Returns the measured intensity (root mean squared)
+ *
+ * params : samples_number is the number of samples used for averaging
+ * See http://openenergymonitor.org/emon/buildingblocks/digital-filters-for-offset-removal
+ *
+ * TODO: Use integer arithmetic
+ */
 int readI(int samples_number) {
     int sample_I = 0;
     int last_sample_I = 0;
@@ -118,7 +144,7 @@ int readI(int samples_number) {
         last_sample_I = sample_I;
         sample_I = analogRead(CURRENT_PIN);
         last_filtered_I = filtered_I;
-        filtered_I = 0.996 * (last_filtered_I + sample_I-last_sample_I);
+        filtered_I = 0.996 * (last_filtered_I + sample_I - last_sample_I);
 
         sum_I += filtered_I * filtered_I;
     }
@@ -126,8 +152,11 @@ int readI(int samples_number) {
     return ICAL * sqrt(sum_I / samples_number);
 }
 
-// Send the data through nRF
-// Auto ACK is enabled so if ok is true, transmission was successful 
+
+/* Sends the data through nRF
+ *
+ * Auto ACK is enabled so if ok is true, transmission was successful
+ */
 int sendRfData() {
     radio.powerUp();
     bool ok = radio.write(&nrf, sizeof(PayloadTX));
@@ -146,12 +175,65 @@ int sendRfData() {
 }
 
 
+/* Sets system into the sleep state. System wakes up when watchdog is timed out.*/
+void system_sleep() {
+    // Disable ADC
+    cbi(ADCSRA, ADEN);
+
+    set_sleep_mode(SLEEP_MODE_PWR_DOWN);
+    sleep_enable();
+
+    // Sleep
+    sleep_mode();
+
+    // System restarts here when timed out
+    sleep_disable();
+    // Enable ADC
+    sbi(ADCSRA, ADEN);
+
+}
+
+
+/* Sets the watchdog to the correct value
+ *
+ * params : ii is the sleep time. Values are:
+ * 0=16ms, 1=32ms,2=64ms,3=128ms,4=250ms,5=500ms, 6=1 sec,7=2 sec, 8=4 sec, 9= 8sec
+ */
+void setup_watchdog(int ii) {
+    byte bb;
+    int ww;
+
+    if(ii > 9){
+        ii = 9;
+    }
+    bb = ii & 7;
+    if(ii > 7) {
+        bb |= (1<<5);
+    }
+    bb |= (1<<WDCE);
+    ww = bb;
+
+    MCUSR &= ~(1<<WDRF);
+    // start timed sequence
+    WDTCSR |= (1<<WDCE) | (1<<WDE);
+    // set new watchdog timeout value
+    WDTCSR = bb;
+    WDTCSR |= _BV(WDIE);
+}
+
+
+/* Watchdog Interrupt Service / is executed when watchdog timed out */
+ISR(WDT_vect) {
+    // Set the global flag
+    f_wdt = 1;
+}
+
+
+/***************************************************************
+ *                          MAIN
+****************************************************************/
 
 void setup() {
-    /*for(byte i = 2; i <= A5; i++) {
-        pinMode (i, OUTPUT);
-        digitalWrite (i, LOW);
-    }*/
     if(DEBUG) {
         Serial.begin(SERIAL_SPEED);
         Serial.println("CitizenWatt sensor.");
@@ -192,29 +274,17 @@ void setup() {
     // Open writing pipe
     radio.openWritingPipe(pipe);
 
-    // Enable anti-crash (restart) watchdog
-    wdt_enable(WDTO_8S);
-
-    // CPU Sleep Modes 
-    // SM2 SM1 SM0 Sleep Mode
-    // 0    0  0 Idle
-    // 0    0  1 ADC Noise Reduction
-    // 0    1  0 Power-down
-    // 0    1  1 Power-save
-    // 1    0  0 Reserved
-    // 1    0  1 Reserved
-    // 1    1  0 Standby(1)
-
-    cbi( SMCR,SE );      // sleep enable, power down mode
-    cbi( SMCR,SM0 );     // power down mode
-    sbi( SMCR,SM1 );     // power down mode
-    cbi( SMCR,SM2 );     // power down mode
+    // Power down mode
+    cbi(SMCR, SE);
+    cbi(SMCR, SM0);
+    sbi(SMCR, SM1);
+    cbi(SMCR, SM2);
 
     setup_watchdog(9);
 }
 
 void loop() {
-    if (f_wdt == 1) {  // wait for timed out watchdog / flag is set when a watchdog timeout occurs
+    if (1 == f_wdt) {  // wait for timed out watchdog / flag is set when a watchdog timeout occurs
         // Check that sensor is ready
         if(!settled && millis() > FILTER_SETTLE_TIME) {
             settled = 1;
@@ -243,47 +313,7 @@ void loop() {
             // Send RF data
             sendRfData();
             
-            //system_sleep();
+            system_sleep();
         }
     }
-}
-
-// Set system into the sleep state 
-// system wakes up when watchdog is timed out
-void system_sleep() {
-    cbi(ADCSRA,ADEN);                    // switch Analog to Digitalconverter OFF
-
-    set_sleep_mode(SLEEP_MODE_PWR_DOWN); // sleep mode is set here
-    sleep_enable();
-
-    sleep_mode();                        // System sleeps here
-
-    sleep_disable();                     // System continues execution here when watchdog timed out 
-    sbi(ADCSRA,ADEN);                    // switch Analog to Digitalconverter ON
-
-}
-
-//****************************************************************
-// 0=16ms, 1=32ms,2=64ms,3=128ms,4=250ms,5=500ms
-// 6=1 sec,7=2 sec, 8=4 sec, 9= 8sec
-void setup_watchdog(int ii) {
-    byte bb;
-    int ww;
-    if (ii > 9 ) ii=9;
-    bb=ii & 7;
-    if (ii > 7) bb|= (1<<5);
-    bb|= (1<<WDCE);
-    ww=bb;
-
-    MCUSR &= ~(1<<WDRF);
-    // start timed sequence
-    WDTCSR |= (1<<WDCE) | (1<<WDE);
-    // set new watchdog timeout value
-    WDTCSR = bb;
-    WDTCSR |= _BV(WDIE);
-}
-//****************************************************************  
-// Watchdog Interrupt Service / is executed when  watchdog timed out
-ISR(WDT_vect) {
-    f_wdt=1;  // set global flag
 }

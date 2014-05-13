@@ -20,7 +20,7 @@ const rf24_pa_dbm_e NRF_PA_LEVEL = RF24_PA_MAX;
 // 76 is default safe channel in RF24
 const int NRF_CHANNEL = 76;
 
-const uint64_t pipes = 0xF0F0F0F0E1LL;
+const uint64_t pipe = 0xE056D446D0LL;
 
 // Struct to receive RF data
 typedef struct {
