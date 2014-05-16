@@ -12962,6 +12962,83 @@ Source: http://www.murata.com .. GRM43DR72E224KW01.pdf</description>
 </deviceset>
 </devicesets>
 </library>
+<library name="con-lumberg">
+<description>&lt;b&gt;Lumberg Connectors&lt;/b&gt;&lt;p&gt;
+include con-mfs.lbr - 2001.03.22&lt;br&gt;
+Jack connectors - 2005.11.23&lt;p&gt;
+http://www.lumberg.de&lt;p&gt;
+&lt;author&gt;Created by librarian@cadsoft.de&lt;/author&gt;</description>
+<packages>
+<package name="1501_03">
+<description>&lt;b&gt;Jack connectors according to JISC 6560, 2.5 mm&lt;/b&gt;&lt;p&gt;
+Klinkensteckverbinder nach JISC 6560, 2,5 mm&lt;br&gt;
+Source: http://www.lumberg.com/Produkte/PDFs/1501_03.pdf</description>
+<wire x1="-1.9" y1="3.9" x2="1.9" y2="3.9" width="0.2032" layer="21"/>
+<wire x1="-1.9" y1="3.9" x2="-1.9" y2="2.5" width="0.2032" layer="21"/>
+<wire x1="-2.4" y1="2.4" x2="2.4" y2="2.4" width="0.2032" layer="21"/>
+<wire x1="2.4" y1="-6.9" x2="-2.4" y2="-6.9" width="0.2032" layer="21"/>
+<wire x1="1.9" y1="3.9" x2="1.9" y2="2.5" width="0.2032" layer="21"/>
+<wire x1="-2.4" y1="-6.9" x2="-2.4" y2="2.4" width="0.2032" layer="51"/>
+<wire x1="2.4" y1="2.4" x2="2.4" y2="-6.9" width="0.2032" layer="51"/>
+<wire x1="-2.4" y1="-6.9" x2="-2.4" y2="-6.49" width="0.2032" layer="21"/>
+<wire x1="2.4" y1="2.4" x2="2.4" y2="0.085" width="0.2032" layer="21"/>
+<wire x1="2.4" y1="-2.045" x2="2.4" y2="-6.9" width="0.2032" layer="21"/>
+<wire x1="-2.4" y1="1.355" x2="-2.4" y2="2.4" width="0.2032" layer="21"/>
+<wire x1="-2.4" y1="-4.36" x2="-2.4" y2="-0.775" width="0.2032" layer="21"/>
+<pad name="1" x="-1.85" y="0.3" drill="1.1" diameter="1.7"/>
+<pad name="2" x="1.85" y="-1" drill="1.1" diameter="1.7"/>
+<pad name="3" x="-1.85" y="-5.7" drill="1.1" diameter="1.7"/>
+<text x="-3.175" y="-6.16" size="1.27" layer="25" rot="R90">&gt;NAME</text>
+<text x="4.445" y="-6.16" size="1.27" layer="27" rot="R90">&gt;VALUE</text>
+<hole x="0" y="0" drill="1.1"/>
+<hole x="0" y="-6" drill="1.1"/>
+</package>
+</packages>
+<symbols>
+<symbol name="STEREO-JACK">
+<wire x1="-2.54" y1="5.08" x2="-1.016" y2="5.08" width="0.1524" layer="94"/>
+<wire x1="-1.016" y1="5.08" x2="2.54" y2="1.524" width="0.1524" layer="94"/>
+<wire x1="-2.54" y1="2.54" x2="-1.524" y2="2.54" width="0.1524" layer="94"/>
+<wire x1="-1.524" y1="2.54" x2="0" y2="1.016" width="0.1524" layer="94"/>
+<wire x1="0" y1="1.016" x2="0.508" y2="1.778" width="0.1524" layer="94"/>
+<wire x1="-2.54" y1="-2.54" x2="5.207" y2="-2.54" width="0.1524" layer="94"/>
+<wire x1="2.54" y1="1.524" x2="3.048" y2="2.286" width="0.1524" layer="94"/>
+<text x="-2.54" y="6.604" size="1.778" layer="95">&gt;NAME</text>
+<text x="-2.54" y="-6.096" size="1.778" layer="96">&gt;VALUE</text>
+<rectangle x1="5.207" y1="-2.667" x2="6.604" y2="2.667" layer="94"/>
+<pin name="1" x="-5.08" y="-2.54" visible="pad" length="short" direction="pas"/>
+<pin name="2" x="-5.08" y="5.08" visible="pad" length="short" direction="pas"/>
+<pin name="3" x="-5.08" y="2.54" visible="pad" length="short" direction="pas"/>
+</symbol>
+</symbols>
+<devicesets>
+<deviceset name="1501_03" prefix="X">
+<description>&lt;b&gt;Klinkensteckverbinder nach JISC 6560, 2,5 mm&lt;/b&gt;&lt;p&gt;
+Jack connectors according to JISC 6560, 2.5 mm&lt;br&gt;
+Source: http://www.lumberg.com/Produkte/PDFs/1501_03.pdf</description>
+<gates>
+<gate name="G$1" symbol="STEREO-JACK" x="0" y="0"/>
+</gates>
+<devices>
+<device name="" package="1501_03">
+<connects>
+<connect gate="G$1" pin="1" pad="1"/>
+<connect gate="G$1" pin="2" pad="2"/>
+<connect gate="G$1" pin="3" pad="3"/>
+</connects>
+<technologies>
+<technology name="">
+<attribute name="MF" value="" constant="no"/>
+<attribute name="MPN" value="" constant="no"/>
+<attribute name="OC_FARNELL" value="1200127" constant="no"/>
+<attribute name="OC_NEWARK" value="unknown" constant="no"/>
+</technology>
+</technologies>
+</device>
+</devices>
+</deviceset>
+</devicesets>
+</library>
 <library name="con-jack">
 <description>&lt;b&gt;Jacks&lt;/b&gt;&lt;p&gt;
 Power Connectors&lt;br&gt;
@@ -15858,63 +15935,6 @@ Source: avr.lbr</description>
 </deviceset>
 </devicesets>
 </library>
-<library name="alex">
-<packages>
-<package name="AUDIO-JACK-3.5">
-<pad name="1S" x="0" y="0" drill="1.3"/>
-<hole x="0" y="-5" drill="1.6"/>
-<hole x="5" y="0" drill="1.6"/>
-<hole x="0" y="5" drill="1.6"/>
-<pad name="5T" x="5" y="5" drill="1.3"/>
-<pad name="2R" x="5" y="-5" drill="1.3"/>
-<wire x1="-6.5" y1="-3" x2="-6.5" y2="3" width="0.127" layer="21"/>
-<wire x1="-6.5" y1="3" x2="-3" y2="3" width="0.127" layer="21"/>
-<wire x1="-3" y1="-3" x2="-6.5" y2="-3" width="0.127" layer="21"/>
-<wire x1="-3" y1="6" x2="-3" y2="-6" width="0.127" layer="21"/>
-<wire x1="-3" y1="-6" x2="7" y2="-6" width="0.127" layer="21"/>
-<wire x1="7" y1="-6" x2="7" y2="6" width="0.127" layer="21"/>
-<wire x1="7" y1="6" x2="-3" y2="6" width="0.127" layer="21"/>
-<wire x1="7" y1="-6" x2="8" y2="-6" width="0.127" layer="21"/>
-<wire x1="8" y1="-6" x2="8" y2="6" width="0.127" layer="21"/>
-<wire x1="8" y1="6" x2="7" y2="6" width="0.127" layer="21"/>
-</package>
-</packages>
-<symbols>
-<symbol name="AUDO-JACK-3.5">
-<rectangle x1="-5.08" y1="-2.54" x2="-3.81" y2="2.54" layer="94"/>
-<wire x1="-5.08" y1="-2.54" x2="7.62" y2="-2.54" width="0.254" layer="94"/>
-<wire x1="-2.54" y1="2.54" x2="-1.27" y2="1.27" width="0.254" layer="94"/>
-<wire x1="-1.27" y1="1.27" x2="2.54" y2="5.08" width="0.254" layer="94"/>
-<wire x1="2.54" y1="5.08" x2="7.62" y2="5.08" width="0.254" layer="94"/>
-<wire x1="1.27" y1="0.254" x2="3.556" y2="2.54" width="0.254" layer="94"/>
-<wire x1="3.556" y1="2.54" x2="7.62" y2="2.54" width="0.254" layer="94"/>
-<wire x1="1.27" y1="0.254" x2="0.254" y2="1.27" width="0.254" layer="94"/>
-<pin name="GND" x="7.62" y="-2.54" visible="off" length="point" swaplevel="7" rot="R180"/>
-<pin name="L" x="7.62" y="2.54" visible="off" length="point" swaplevel="7" rot="R180"/>
-<pin name="R" x="7.62" y="5.08" visible="off" length="point" swaplevel="7" rot="R180"/>
-</symbol>
-</symbols>
-<devicesets>
-<deviceset name="AUDIO-JACK-3.5">
-<description>Mouser Jack 3"5</description>
-<gates>
-<gate name="G$1" symbol="AUDO-JACK-3.5" x="-7.62" y="-5.08"/>
-</gates>
-<devices>
-<device name="" package="AUDIO-JACK-3.5">
-<connects>
-<connect gate="G$1" pin="GND" pad="1S"/>
-<connect gate="G$1" pin="L" pad="5T"/>
-<connect gate="G$1" pin="R" pad="2R"/>
-</connects>
-<technologies>
-<technology name=""/>
-</technologies>
-</device>
-</devices>
-</deviceset>
-</devicesets>
-</library>
 </libraries>
 <attributes>
 </attributes>
@@ -15931,6 +15951,7 @@ Source: avr.lbr</description>
 <part name="R3" library="rcl" deviceset="R-EU_" device="0204/7" value="470K"/>
 <part name="FTDI" library="pinhead" deviceset="PINHD-1X6" device=""/>
 <part name="NRF" library="pinhead" deviceset="PINHD-2X4" device=""/>
+<part name="X2" library="con-lumberg" deviceset="1501_03" device=""/>
 <part name="JP1" library="pinhead" deviceset="PINHD-1X2" device=""/>
 <part name="R4" library="rcl" deviceset="R-EU_" device="0204/7" value="1K"/>
 <part name="C5" library="rcl" deviceset="C-EU" device="025-024X044" value="0.1 µF 6V"/>
@@ -15959,7 +15980,6 @@ Source: avr.lbr</description>
 <part name="C2" library="rcl" deviceset="C-EU" device="025-024X044" value="0.1 µF 6V"/>
 <part name="GND4" library="supply1" deviceset="GND" device=""/>
 <part name="P+2" library="supply1" deviceset="VCC" device=""/>
-<part name="J2" library="alex" deviceset="AUDIO-JACK-3.5" device=""/>
 </parts>
 <sheets>
 <sheet>
@@ -15975,6 +15995,7 @@ Source: avr.lbr</description>
 <instance part="R3" gate="G$1" x="38.1" y="96.52" rot="R180"/>
 <instance part="FTDI" gate="A" x="2.54" y="53.34" rot="R180"/>
 <instance part="NRF" gate="A" x="10.16" y="25.4" rot="R180"/>
+<instance part="X2" gate="G$1" x="15.24" y="104.14" rot="MR0"/>
 <instance part="JP1" gate="G$1" x="63.5" y="109.22"/>
 <instance part="R4" gate="G$1" x="40.64" y="119.38" rot="R90"/>
 <instance part="C5" gate="G$1" x="17.78" y="58.42" rot="R90"/>
@@ -16006,7 +16027,6 @@ Source: avr.lbr</description>
 <instance part="C2" gate="G$1" x="40.64" y="45.72" rot="R180"/>
 <instance part="GND4" gate="1" x="40.64" y="40.64"/>
 <instance part="P+2" gate="VCC" x="27.94" y="76.2"/>
-<instance part="J2" gate="G$1" x="12.7" y="104.14"/>
 </instances>
 <busses>
 </busses>
@@ -16392,8 +16412,8 @@ Source: avr.lbr</description>
 <junction x="33.02" y="96.52"/>
 <junction x="33.02" y="88.9"/>
 <junction x="33.02" y="101.6"/>
+<pinref part="X2" gate="G$1" pin="1"/>
 <wire x1="33.02" y1="101.6" x2="20.32" y2="101.6" width="0.1524" layer="91"/>
-<pinref part="J2" gate="G$1" pin="GND"/>
 <junction x="20.32" y="101.6"/>
 </segment>
 </net>
@@ -16410,8 +16430,8 @@ Source: avr.lbr</description>
 <junction x="40.64" y="114.3"/>
 <wire x1="33.02" y1="111.76" x2="27.94" y2="111.76" width="0.1524" layer="91"/>
 <wire x1="27.94" y1="111.76" x2="27.94" y2="106.68" width="0.1524" layer="91"/>
+<pinref part="X2" gate="G$1" pin="3"/>
 <wire x1="27.94" y1="106.68" x2="20.32" y2="106.68" width="0.1524" layer="91"/>
-<pinref part="J2" gate="G$1" pin="L"/>
 <junction x="20.32" y="106.68"/>
 </segment>
 </net>

@@ -6,7 +6,7 @@
 <setting alwaysvectorfont="no"/>
 <setting verticaltext="up"/>
 </settings>
-<grid distance="0.1" unitdist="inch" unit="inch" style="lines" multiple="1" display="yes" altdistance="0.01" altunitdist="inch" altunit="inch"/>
+<grid distance="0.1" unitdist="inch" unit="inch" style="lines" multiple="1" display="no" altdistance="0.01" altunitdist="inch" altunit="inch"/>
 <layers>
 <layer number="1" name="Top" color="4" fill="1" visible="no" active="no"/>
 <layer number="16" name="Bottom" color="1" fill="1" visible="no" active="no"/>
@@ -15942,7 +15942,7 @@ Source: avr.lbr</description>
 <part name="R7" library="rcl" deviceset="R-EU_" device="0204/7" value="120K"/>
 <part name="LED1" library="led" deviceset="LED" device="3MM"/>
 <part name="R8" library="rcl" deviceset="R-EU_" device="0204/7" value="500R"/>
-<part name="Y1" library="SparkFun-FreqCtrl" deviceset="RESONATOR" device="PTH"/>
+<part name="Y1" library="SparkFun-FreqCtrl" deviceset="RESONATOR" device="PTH" value="16MHz"/>
 <part name="FRAME1" library="SparkFun-Aesthetics" deviceset="FRAME-A4L" device=""/>
 <part name="JP4" library="SparkFun-Connectors" deviceset="M02" device="JST-PTH-2"/>
 <part name="R9" library="rcl" deviceset="R-EU_" device="0204/7" value="470K"/>
@@ -15959,7 +15959,7 @@ Source: avr.lbr</description>
 <part name="C2" library="rcl" deviceset="C-EU" device="025-024X044" value="0.1 µF 6V"/>
 <part name="GND4" library="supply1" deviceset="GND" device=""/>
 <part name="P+2" library="supply1" deviceset="VCC" device=""/>
-<part name="U$1" library="alex" deviceset="AUDIO-JACK-3.5" device=""/>
+<part name="J2" library="alex" deviceset="AUDIO-JACK-3.5" device=""/>
 </parts>
 <sheets>
 <sheet>
@@ -16006,7 +16006,7 @@ Source: avr.lbr</description>
 <instance part="C2" gate="G$1" x="40.64" y="45.72" rot="R180"/>
 <instance part="GND4" gate="1" x="40.64" y="40.64"/>
 <instance part="P+2" gate="VCC" x="27.94" y="76.2"/>
-<instance part="U$1" gate="G$1" x="12.7" y="104.14"/>
+<instance part="J2" gate="G$1" x="12.7" y="104.14"/>
 </instances>
 <busses>
 </busses>
@@ -16393,7 +16393,7 @@ Source: avr.lbr</description>
 <junction x="33.02" y="88.9"/>
 <junction x="33.02" y="101.6"/>
 <wire x1="33.02" y1="101.6" x2="20.32" y2="101.6" width="0.1524" layer="91"/>
-<pinref part="U$1" gate="G$1" pin="GND"/>
+<pinref part="J2" gate="G$1" pin="GND"/>
 <junction x="20.32" y="101.6"/>
 </segment>
 </net>
@@ -16411,8 +16411,9 @@ Source: avr.lbr</description>
 <wire x1="33.02" y1="111.76" x2="27.94" y2="111.76" width="0.1524" layer="91"/>
 <wire x1="27.94" y1="111.76" x2="27.94" y2="106.68" width="0.1524" layer="91"/>
 <wire x1="27.94" y1="106.68" x2="20.32" y2="106.68" width="0.1524" layer="91"/>
-<pinref part="U$1" gate="G$1" pin="L"/>
+<pinref part="J2" gate="G$1" pin="L"/>
 <junction x="20.32" y="106.68"/>
+<junction x="33.02" y="111.76"/>
 </segment>
 </net>
 <net name="N$3" class="0">
@@ -16685,16 +16686,15 @@ Source: avr.lbr</description>
 </sheet>
 </sheets>
 <errors>
-<approved hash="113,1,4.84293,43.0488,FTDI,,,,,"/>
+<approved hash="104,1,50.8,48.26,IC1,AVCC,VCC,,,"/>
+<approved hash="113,1,4.84293,50.6688,FTDI,,,,,"/>
 <approved hash="113,1,8.93233,22.7288,NRF,,,,,"/>
-<approved hash="113,1,68.58,48.188,IC1,,,,,"/>
-<approved hash="113,1,58.6571,99.1912,JP1,,,,,"/>
-<approved hash="113,1,127.237,48.3912,JP2,,,,,"/>
-<approved hash="113,1,136.923,48.3912,JP3,,,,,"/>
-<approved hash="113,1,120.738,80.01,C4,,,,,"/>
-<approved hash="113,1,68.9017,13.97,LED2,,,,,"/>
-<approved hash="113,1,53.34,5.88433,Y1,,,,,"/>
-<approved hash="113,1,116.84,7.13317,D5,,,,,"/>
+<approved hash="113,1,61.1971,111.891,JP1,,,,,"/>
+<approved hash="113,1,155.177,83.9512,JP2,,,,,"/>
+<approved hash="113,1,164.863,83.9512,JP3,,,,,"/>
+<approved hash="113,1,160.342,21.59,LED1,,,,,"/>
+<approved hash="113,1,170.502,21.59,LED2,,,,,"/>
+<approved hash="115,1,45.72,50.8,AREF,,,,,"/>
 </errors>
 </schematic>
 </drawing>
