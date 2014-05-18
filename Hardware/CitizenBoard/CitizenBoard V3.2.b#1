@@ -8,17 +8,17 @@
 </settings>
 <grid distance="0.01" unitdist="inch" unit="inch" style="lines" multiple="1" display="yes" altdistance="0.025" altunitdist="inch" altunit="inch"/>
 <layers>
-<layer number="1" name="Top" color="4" fill="1" visible="yes" active="yes"/>
+<layer number="1" name="Top" color="4" fill="1" visible="no" active="yes"/>
 <layer number="16" name="Bottom" color="1" fill="1" visible="yes" active="yes"/>
-<layer number="17" name="Pads" color="2" fill="1" visible="no" active="yes"/>
-<layer number="18" name="Vias" color="2" fill="1" visible="no" active="yes"/>
+<layer number="17" name="Pads" color="2" fill="1" visible="yes" active="yes"/>
+<layer number="18" name="Vias" color="2" fill="1" visible="yes" active="yes"/>
 <layer number="19" name="Unrouted" color="6" fill="1" visible="yes" active="yes"/>
 <layer number="20" name="Dimension" color="15" fill="1" visible="yes" active="yes"/>
-<layer number="21" name="tPlace" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="21" name="tPlace" color="7" fill="1" visible="no" active="yes"/>
 <layer number="22" name="bPlace" color="7" fill="1" visible="yes" active="yes"/>
 <layer number="23" name="tOrigins" color="15" fill="1" visible="yes" active="yes"/>
 <layer number="24" name="bOrigins" color="15" fill="1" visible="yes" active="yes"/>
-<layer number="25" name="tNames" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="25" name="tNames" color="7" fill="1" visible="no" active="yes"/>
 <layer number="26" name="bNames" color="7" fill="1" visible="yes" active="yes"/>
 <layer number="27" name="tValues" color="7" fill="1" visible="no" active="yes"/>
 <layer number="28" name="bValues" color="7" fill="1" visible="no" active="yes"/>
@@ -2004,7 +2004,7 @@ Your Eurocircuits Team
 <attribute name="NAME" x="10.922" y="29.6926" size="0.9906" layer="25" ratio="10" rot="R180"/>
 <attribute name="VALUE" x="11.7856" y="29.6926" size="0.9906" layer="27" ratio="10" rot="R180"/>
 </element>
-<element name="Y1" library="SparkFun-FreqCtrl" package="RESONATOR-PTH" value="" x="35.56" y="2.54"/>
+<element name="Y1" library="SparkFun-FreqCtrl" package="RESONATOR-PTH" value="16MHz" x="35.56" y="2.54"/>
 <element name="JP4" library="SparkFun-Connectors" package="JST-2-PTH" value="M02JST-PTH-2" x="3.81" y="6.35" smashed="yes" rot="R180">
 <attribute name="SKU" value="PRT-09914" x="-43.18" y="27.94" size="1.778" layer="27" rot="R180" display="off"/>
 <attribute name="VALUE" x="5.08" y="2.35" size="0.4064" layer="27" rot="R180"/>
