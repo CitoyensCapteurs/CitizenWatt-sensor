@@ -24,9 +24,7 @@ const uint64_t pipe = 0xE056D446D0LL;
 
 // Struct to receive RF data
 typedef struct {
-    int intensity;
-    int voltage;
-    int battery;
+    int power;
 } PayloadTX;
 
 RF24 radio(RPI_V2_GPIO_P1_15, RPI_V2_GPIO_P1_24, BCM2835_SPI_SPEED_8MHZ);
@@ -36,9 +34,7 @@ void handlePayload(PayloadTX payload) {
         time(&timer);
 
         std::cout << "[" << difftime(start, timer) << "]" << "Packet received.\n";
-        std::cout << "Intensity : " << payload.intensity << "\t";
-        std::cout << "Voltage : " << payload.voltage << "\t";
-        std::cout << "Battery : " << payload.battery << "\t";
+        std::cout << "Power : " << payload.power << "\t";
     }
 }
 
