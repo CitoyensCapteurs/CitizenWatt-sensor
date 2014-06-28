@@ -1,68 +1,55 @@
-/* CitizenWatt sensor code
- *
- * TODO:
- *      License and cie
- *      Deactivate TWI, BOD
- *      Bug with sleep and serial ?
- *      nRF not working ?
- *      Various TODOs in file
- *
- * NEED:
- *      RF24 lib from https://github.com/TMRh20/RF24/
- *
- * THANKS:
- *      Code for the sleep mode from http://interface.khm.de/index.php/lab/experiments/sleep_watchdog_battery/
- */
+ ///////////////////
+//   Includes    //
+///////////////////
 
+#include <EEPROM.h>
 #include <SPI.h>
-#include <avr/wdt.h>
 #include <avr/sleep.h>
 #include <avr/power.h>
 #include "nRF24L01.h"
 #include "RF24.h"
 
-#ifndef cbi
-#define cbi(sfr, bit) (_SFR_BYTE(sfr) &= ~_BV(bit))
-#endif
-#ifndef sbi
-#define sbi(sfr, bit) (_SFR_BYTE(sfr) |= _BV(bit))
-#endif
+///////////////////////
+//   CONFIGURATION   //
+///////////////////////
 
-#define VCC _BV(MUX3) | _BV(MUX2) | _BV(MUX1)
-#define EXTERNAL 0x01
+#define DEBUG 1
 
-/***************************************************************
- *      CHANGE BELOW THIS LINE TO EDIT CONFIG
-****************************************************************/
+// input is for reading serial inputs, inMenu for menu navigation 
+// SERIAL_BAUDRATE is for setting the baudrate for serial communication
+char input;
+int inMenu = 0;
+int SERIAL_BAUDRATE;
+#define BAUDRATE_EEPROM 7
 
 // Time (ms) to allow the filters to settle before sending data
-const int FILTER_SETTLE_TIME = 5000;
-
-// Enable debugging on serial ?
-const int DEBUG = 1;
-
-// Speed for the serial comm
-const int SERIAL_SPEED = 9600;
+// const int FILTER_SETTLE_TIME = 5000;
 
 // Speed for the nrf module
 // RF24_250KBPS / RF24_1MBPS / RF24_2MBPS
 // Reduce it to improve reliability
-const rf24_datarate_e NRF_SPEED = RF24_1MBPS;
+rf24_datarate_e NRF_SPEED;
+#define NRF_SPEED_EEPROM 0
 
 // PreAmplifier level for the nRF
 // Lower this to reduce power consumption. This will reduce range.
-const rf24_pa_dbm_e NRF_PA_LEVEL = RF24_PA_MAX;
+rf24_pa_dbm_e NRF_PA_LEVEL;
+#define NRF_PA_LEVEL_EEPROM 1
 
 // Channel for the nrf module
 // 76 is default safe channel in RF24
-const int NRF_CHANNEL = 76;
+int NRF_CHANNEL;
+#define NRF_CHANNEL_EEPROM 2
+
 
 // Set this to 0 to enable voltage measurement.
 // Else, set this to your mean voltage.
-const int VOLTAGE = 240;
+int VOLTAGE;
+#define VOLTAGE_EEPROM 3
 
 // Number of samples over which the mean must be done for the current measurement
-const int NUMBER_SAMPLES_I = 1480;
+int NUMBER_SAMPLES_I;
+#define NUMBER_SAMPLES_I_EEPROM 4
 
 // Pin for current measurement
 const int CURRENT_PIN = A0;
@@ -71,18 +58,19 @@ const int CURRENT_PIN = A0;
 const int VOLTAGE_PIN = 0;
 
 // Calibration factor for the intensity
-const double ICAL = 111.1;
+double ICAL = 111.1;
+#define ICAL_EEPROM 5
 
 // Radio pipe addresses for the 2 nodes to communicate.
-const uint64_t pipe = 0xE056D446D0LL;
+uint64_t pipe = 0xE056D446D0LL;
+#define PIPE_EEPROM 6
 
 
-/***************************************************************
- *                      GLOBAL VARS 
-****************************************************************/
+///////////////////////
+//   Declarations    //
+///////////////////////
 
-// Watchdog state
-volatile boolean f_wdt = 1;
+#define TIMEOUT 250 // timeout in ms
 
 // Struct to send RF data
 typedef struct {
@@ -94,23 +82,516 @@ typedef struct {
 // Next measurement to be sent
 PayloadTX nrf = {0, 0, 0};
 
-// Set up nrf24L01 radio
+////////////////////////////////
+//   Hardware configuration   //
+////////////////////////////////
+
+// Set up nRF24L01 radio on SPI bus plus pins 9 & 10
+
 RF24 radio(9,10);
 
-// Wether we are ready to send the measure or not.
-// Store it because millis reinitialize after 50 days.
-int settled = 0;
+//////////////////////////////
+//   Sleep configuration    //
+//////////////////////////////
 
+typedef enum { wdt_16ms = 0, wdt_32ms, wdt_64ms, wdt_128ms, wdt_250ms, wdt_500ms, wdt_1s, wdt_2s, wdt_4s, wdt_8s } wdt_prescalar_e;
 
-/***************************************************************
- *                       FUNCTIONS
-****************************************************************/
+void setup_watchdog(uint8_t prescalar);
+void do_sleep(void);
 
-/* Returns the battery voltage
- * 
- * params : source is either VCC (battery) or EXTERNAL (external voltage) or a value for the MUX register
- * See http://openenergymonitor.blogspot.it/2012/08/low-level-adc-control-admux.html
- */
+const short sleep_cycles_per_transmission = 1; // Number of seconds to sleep between 2 events
+volatile short sleep_cycles_remaining = sleep_cycles_per_transmission;
+
+#ifndef cbi
+#define cbi(sfr, bit) (_SFR_BYTE(sfr) &= ~_BV(bit))
+#endif
+#ifndef sbi
+#define sbi(sfr, bit) (_SFR_BYTE(sfr) |= _BV(bit))
+#endif
+
+//////////////////////////
+//   Setup operation    //
+//////////////////////////
+
+void setup(void)
+{
+  Serial.begin(57600);
+  Serial.println("/!\\ STARTING CitizenOS");
+  
+  // Read the config stored on EEPROM
+  int nrf_speed_eeprom = EEPROM.read(NRF_SPEED_EEPROM);
+  int nrf_pa_level_eeprom = EEPROM.read(NRF_PA_LEVEL_EEPROM);
+  int nrf_channel_eeprom = EEPROM.read(NRF_CHANNEL_EEPROM);
+  int voltage_eeprom = EEPROM.read(VOLTAGE_EEPROM);
+  int number_samples_i_eeprom = EEPROM.read(NUMBER_SAMPLES_I_EEPROM);
+  int ical_eeprom = EEPROM.read(ICAL_EEPROM);
+  int pipe_eeprom = EEPROM.read(PIPE_EEPROM);
+  int baudrate_eeprom = EEPROM.read(BAUDRATE_EEPROM);
+
+  Serial.println("//////////////////////////////");
+  Serial.println("//    CitizenWatt sensor    //");
+  Serial.println("//    citizenwatt.paris     //");
+  Serial.println("////////////////////////////// \n");
+  Serial.println("Configuration:");
+  Serial.println("==============================");
+  
+  // Load the config
+  load(nrf_speed_eeprom, nrf_pa_level_eeprom, nrf_channel_eeprom, 
+       voltage_eeprom, number_samples_i_eeprom, ical_eeprom, 
+       pipe_eeprom, baudrate_eeprom);
+       
+  Serial.println();
+  Serial.println("[+] Go to the config menu ? y/[n]");
+  inMenu = 1;
+  
+  //
+  // Prepare sleep parameters
+  //
+
+  setup_watchdog(wdt_2s); // /!\ 2s sleeping
+
+  //
+  // Setup and configure rf radio
+  //
+
+  // Initialize nRF
+  radio.begin();
+  radio.setChannel(NRF_CHANNEL);  
+
+  // Max number of retries and max delay between them
+  // radio.setRetries(15, 15);
+
+  // Reduce payload size to improve reliability
+  radio.setPayloadSize(8);
+
+  // Set the datarate
+  radio.setDataRate(NRF_SPEED);
+  
+  // Use the largest CRC
+  radio.setCRCLength(RF24_CRC_16);
+  
+  // Ensure auto ACK is enabled
+  //radio.setAutoAck(1);
+  
+  // Use the adapted PA level
+  radio.setPALevel(NRF_PA_LEVEL);  
+  
+  // Open writing pipe
+  radio.openWritingPipe(0xE056D446D0LL);
+
+  //
+  // Start listening
+  //
+
+  radio.startListening();  
+}
+
+void load(int nrf_speed_eeprom, int nrf_pa_level_eeprom, int nrf_channel_eeprom, int voltage_eeprom, 
+         int number_samples_i_eeprom, int ical_eeprom, int pipe_eeprom, int baudrate_eeprom)
+{
+  switch(nrf_speed_eeprom) {
+    case '1':
+      NRF_SPEED = RF24_250KBPS;
+      Serial.println("[+] Successfully set nRF speed to 250 kbps");
+      break;
+    case '2':
+      NRF_SPEED = RF24_1MBPS;
+      Serial.println("[+] Successfully set nRF speed to 1 mbps");
+      break;
+    case '3':
+      Serial.println("[+] Successfully set nRF speed to 2 mbps");
+      NRF_SPEED = RF24_2MBPS;
+      break;
+  }
+  switch(nrf_pa_level_eeprom) {
+    case '1':
+      Serial.println("[+] Successfully set nRF power to -18 dBm");
+      NRF_PA_LEVEL = RF24_PA_MIN;
+      break;
+    case '2':
+      NRF_PA_LEVEL = RF24_PA_LOW;
+      Serial.println("[+] Successfully set nRF power to -12 dBm");
+      break;
+    case '3':
+      //NRF_PA_LEVEL = RF24_PA_MED;
+      Serial.println("[-] Successfully set nRF power to -6 dBm");
+      break;
+    case '4':
+      NRF_PA_LEVEL = RF24_PA_HIGH;
+      Serial.println("[+] Successfully set nRF power to 0 dBm");
+      break;
+  }
+  switch(nrf_channel_eeprom) {
+    case '1':
+      Serial.println("[+] Successfully set nrf channel to ?");
+      NRF_CHANNEL = 76;
+      break;
+    case '2':
+      NRF_CHANNEL = 76;
+      Serial.println("[+] Successfully set nrf channel to ?");
+      break;
+    case '3':
+      NRF_CHANNEL = 76;
+      Serial.println("[+] Successfully set nrf channel to ?");
+      break;
+    case '4':
+      NRF_CHANNEL = 76;
+      Serial.println("[+] Successfully set nrf channel to ?");
+      break;
+  }        
+  switch(voltage_eeprom) {
+    case '1':
+      Serial.println("[+] Successfully set mean voltage to 210V");
+      VOLTAGE = 210;
+      break;
+    case '2':
+      VOLTAGE = 220;
+      Serial.println("[+] Successfully set mean voltage to 220V");
+      break;
+    case '3':
+      VOLTAGE = 230;
+      Serial.println("[+] Successfully set mean voltage to 230V");
+      break;
+    case '4':
+      VOLTAGE = 240;
+      Serial.println("[+] Successfully set mean voltage to 240V");
+      break;
+  }       
+  switch(number_samples_i_eeprom) {
+    case '1':
+      Serial.println("[+] Successfully set number of samples to 1470 sample/s");
+      NUMBER_SAMPLES_I = 210;
+      break;
+    case '2':
+      NUMBER_SAMPLES_I = 220;
+      Serial.println("[+] Successfully set number of samples to 1480 sample/s");
+      break;
+    case '3':
+      NUMBER_SAMPLES_I = 230;
+      Serial.println("[+] Successfully set number of samples to 1490 sample/s");
+      break;
+    /*case '4':
+      NUMBER_SAMPLES_I = 240;
+      Serial.println("[+] Successfully set number of samples to 240V");
+      break;*/
+  }
+      
+  /*switch(pipe_eeprom) {  
+    case '1':
+      Serial.println("[+] Successfully set pipe address to 0xE056D446D0LL");
+      pipe = 0xE056D446D0LL;
+      break;
+    case '2':
+      pipe = 0xE056D446D0LL;
+      Serial.println("[+] Successfully set pipe address to 0xE056D446D0LL");
+      break;
+    case '3':
+      pipe = 0xE056D446D0LL;
+      Serial.println("[+] Successfully set pipe address to 0xE056D446D0LL");
+      break;
+    case '4':
+      pipe = 0xE056D446D0LL;
+      Serial.println("[+] Successfully set pipe address to 0xE056D446D0LL");
+      break;
+  }*/
+  
+  /*switch(ical_eeprom) {  //TODO
+  }
+  
+  switch(baudrate_eeprom) {
+    case '1':
+      Serial.println("[+] Successfully set baudrate to 9600 baud");
+      SERIAL_BAUDRATE = 9600;
+      break;
+    case '2':
+      SERIAL_BAUDRATE = 19200;
+      Serial.println("[+] Successfully set baudrate to 19200 baud");
+      break;
+    case '3':
+      SERIAL_BAUDRATE = 57600;
+      Serial.println("[+] Successfully set baudrate to 57600 baud");
+      break;
+    case '4':
+      SERIAL_BAUDRATE = 115200;
+      Serial.println("[+] Successfully set baudrate to 115200 baud");
+      break;
+  }   */
+  
+}
+
+///////////////////////////////
+//   Loop part of the code   //
+///////////////////////////////
+
+void loop(void)
+{
+  if(inMenu != 0) {
+    menu();
+  }
+  else {
+    //
+    // Data sender
+    //
+    
+    // First, stop listening so we can talk.
+    //radio.stopListening();
+    
+    Serial.print("|");
+    //Serial.print(nrf.intensity);
+    Serial.print("\t");
+    Serial.print("|");
+    Serial.print("\t");
+    //Serial.print(nrf.voltage);
+    Serial.print("\t");
+    Serial.print("|");
+    Serial.print("\t");
+    //Serial.print(nrf.battery);
+    Serial.print("\t");
+    Serial.print("|");
+    Serial.println();
+  
+    radio.write(&nrf, sizeof(PayloadTX));
+  
+    // Now, continue listening now the goal is to get some data back as ACK
+    radio.startListening();
+  
+    // Wait here until we get a response, or timeout (250ms)
+    unsigned long started_waiting_at = millis();
+    bool timeout = false;
+    while ( ! radio.available() && ! timeout )
+      if (millis() - started_waiting_at > TIMEOUT )
+        timeout = true;
+  
+    // Describe the results
+    if ( timeout && DEBUG )
+    {
+      Serial.println("[!] Failed to send packet : response timed out ...");
+    }
+  
+    //
+    // Shut down the system
+    //
+  
+    // Experiment with some delay here to see if it has an effect
+    delay(500);
+  
+    // Power down the radio.  Note that the radio will get powered back up
+    // on the next write() call.
+    radio.powerDown();
+  /*
+    // Sleep the MCU.  The watchdog timer will awaken in a short while, and
+    // continue execution here.
+    while( sleep_cycles_remaining )
+      do_sleep();
+  
+    sleep_cycles_remaining = sleep_cycles_per_transmission;
+    delay(1000);
+  */
+  }
+}
+
+/////////////////////////////
+//   MENU CONFIGURATION    //
+/////////////////////////////
+
+void menu() {
+  if(inMenu == 1) {
+    while(!Serial.available()) { }
+    input = Serial.read();
+    if(input == 'Y' || input == 'y') {
+      Serial.println();
+      Serial.println("\t [1] Change nRF speed");
+      Serial.println("\t [2] Change nRF PA level");
+      Serial.println("\t [3] Change serial baudrate");
+      Serial.println("\t [4] Change nRF channel");
+      Serial.println("\t [5] Change mean voltage (0 to enable measurements)");
+      Serial.println("\t [6] Change number of samples for intensity measurement");
+      Serial.println("\t [7] Change calibration factor");
+      Serial.println("\t [8] Change nRF's pipe address");
+      Serial.println("\t [9] Exit menu");
+      Serial.println("[*] When setting set, confirm by writing 'y'");
+      Serial.println("[*] these settings will be effective on next reboot");
+      Serial.println("[+] What is your choice ? (1...9) ");
+      inMenu = 2;
+      }
+    else {
+      inMenu = -1;
+    }
+  }
+  
+  if(inMenu == -1) { 
+    Serial.println("===============");
+    Serial.println("Starting measuring.");
+    Serial.println();
+    Serial.println("|I\t|\tV\t|\tBattery |");
+    Serial.print("|");
+    //Serial.println(inMenu);
+    //Serial.print(nrf.intensity);
+    Serial.print("\t");
+    Serial.print("|");
+    Serial.print("\t");
+    //Serial.print(nrf.voltage);
+    Serial.print("\t");
+    Serial.print("|");
+    Serial.print("\t");
+    //Serial.print(nrf.battery);
+    Serial.print("\t");
+    Serial.print("|");
+    Serial.println();
+    inMenu = 0;
+  }
+  
+  switch(inMenu) {
+    case 2:
+      while(!Serial.available()) { }
+      input = Serial.read();
+      Serial.println(input);
+      switch(input) {
+      case '1':
+        inMenu = 11;
+        break;
+      case '2':
+        inMenu = 12;
+        break;
+      case '3':
+        inMenu = 13;
+        break;
+      case '4':
+        inMenu = 14;
+        break;
+      case '5':
+        inMenu = 15;
+        break;
+      case '6':
+        inMenu = 16;
+        break;
+      case '7':
+        inMenu = 17;
+        break;
+      case '8':
+        inMenu = 18;
+        break;
+      case '9':
+        inMenu = -1;
+        break;
+      }
+      break;
+      
+    case 11:
+      Serial.println("[*] nRF speed in Kbps (1 for 250, 2 for 1024 or 3 for 2048) : ");
+      while(!Serial.available()) {}
+      input = Serial.read();
+      EEPROM.write(NRF_SPEED_EEPROM, (int)input);
+      Serial.write("[*] Press 'y' to confirm");
+      inMenu = 1;
+      break;
+      
+    case 12:
+      Serial.println("[!] WARNING : changing PA level can considerably increase power consumption !");
+      Serial.println("[*] nRF PA level (1 for -18, 2 for -12, 3 for -6 or 4 for 0 dBm) : ");
+      while(!Serial.available()) {}
+      input = Serial.read();
+      EEPROM.write(NRF_PA_LEVEL_EEPROM, (int)input);
+      Serial.write("[*] Press 'y' to confirm");
+      inMenu = 1;
+      break;
+      
+    case 13: 
+      Serial.println("[*] serial baudrate (1 for 9600, 2 for 19200 3 for 57600 or 4 for 115200): ");
+      while(!Serial.available()) {}
+      input = Serial.read();
+      EEPROM.write(BAUDRATE_EEPROM, (int)input);
+      Serial.write("[*] Press 'y' to confirm");
+      inMenu = 1;
+      break;
+      
+    case 14:
+      Serial.println("[*] nRF channel : ");
+      while(!Serial.available()) {}
+      input = Serial.read();
+      EEPROM.write(NRF_CHANNEL_EEPROM, (int)input);
+      Serial.write("[*] Press 'y' to confirm");
+      inMenu = 1;
+     break; 
+     
+    case 15:
+      Serial.println("[*] mean voltage : ");
+      while(!Serial.available()) {}
+      input = Serial.read();
+      EEPROM.write(VOLTAGE_EEPROM, (int)input);
+      Serial.write("[*] Press 'y' to confirm");
+      inMenu = 1;
+      break; 
+      
+    case 16:
+      Serial.println("[*] number of samples : ");
+      while(!Serial.available()) {}
+      input = Serial.read();
+      EEPROM.write(NUMBER_SAMPLES_I_EEPROM, (int)input);
+      Serial.write("[*] Press 'y' to confirm");
+      inMenu = 1;
+      break; 
+      
+    case 17:
+      inMenu = 1;
+      Serial.write("[*] Press 'y' to confirm");
+      break;
+      
+    case 18:
+      inMenu = 1;
+      Serial.write("[*] Press 'y' to confirm");
+      break;
+  }
+
+}
+//////////////////////////
+//   Sleep functions    //
+//////////////////////////
+
+// 0=16ms, 1=32ms,2=64ms,3=125ms,4=250ms,5=500ms
+// 6=1 sec,7=2 sec, 8=4 sec, 9= 8sec
+
+void setup_watchdog(uint8_t prescalar)
+{
+  prescalar = min(9,prescalar);
+  uint8_t wdtcsr = prescalar & 7;
+  if ( prescalar & 8 )
+    wdtcsr |= _BV(WDP3);
+
+  MCUSR &= ~_BV(WDRF);
+  WDTCSR = _BV(WDCE) | _BV(WDE);
+  WDTCSR = _BV(WDCE) | wdtcsr | _BV(WDIE);
+}
+
+ISR(WDT_vect)
+{
+  --sleep_cycles_remaining;
+}
+
+void do_sleep(void)
+{
+  //cbi(ADCSRA, ADEN);                   // Disable ADC
+  
+  set_sleep_mode(SLEEP_MODE_PWR_DOWN); // sleep mode is set here
+  sleep_enable();
+
+  sleep_mode();                        // System sleeps here
+
+  sleep_disable();                     // System continues execution here when watchdog timed out
+  
+  //sbi(ADCSRA, ADEN);                   // Enable ADC
+}
+
+/////////////////////////////////
+//   Data reading functions    //
+/////////////////////////////////
+
+// Returns the battery voltage
+//
+// params : source is either VCC (battery) or EXTERNAL (external voltage) or a value for the MUX register
+// See http://openenergymonitor.blogspot.it/2012/08/low-level-adc-control-admux.html
+//
+
 int readV(int mux) {
     int result = 0;
     // Use internal reference. MUX = 1110 is internal 1.1V
@@ -126,13 +607,13 @@ int readV(int mux) {
 }
 
 
-/* Returns the measured intensity (root mean squared)
- *
- * params : samples_number is the number of samples used for averaging
- * See http://openenergymonitor.org/emon/buildingblocks/digital-filters-for-offset-removal
- *
- * TODO: Use integer arithmetic
- */
+// Returns the measured intensity (root mean squared)
+//
+// params : samples_number is the number of samples used for averaging
+// See http://openenergymonitor.org/emon/buildingblocks/digital-filters-for-offset-removal
+//
+// TODO: Use integer arithmetic
+//
 int readI(int samples_number) {
     int sample_I = 0;
     int last_sample_I = 0;
@@ -152,168 +633,3 @@ int readI(int samples_number) {
     return ICAL * sqrt(sum_I / samples_number);
 }
 
-
-/* Sends the data through nRF
- *
- * Auto ACK is enabled so if ok is true, transmission was successful
- */
-int sendRfData() {
-    radio.powerUp();
-    bool ok = radio.write(&nrf, sizeof(PayloadTX));
-
-    if(DEBUG) {
-        if(ok) {
-            Serial.println("Data sent through nRF.");
-        } else {
-            Serial.println("Data sending failed…");
-        }
-    }
-    radio.powerDown();
-
-    // If unable to send data, return -1
-    return (int) ok;
-}
-
-
-/* Sets system into the sleep state. System wakes up when watchdog is timed out.*/
-void system_sleep() {
-    // Disable ADC
-    cbi(ADCSRA, ADEN);
-
-    set_sleep_mode(SLEEP_MODE_PWR_DOWN);
-    sleep_enable();
-
-    // Sleep
-    sleep_mode();
-
-    // System restarts here when timed out
-    sleep_disable();
-    // Enable ADC
-    sbi(ADCSRA, ADEN);
-
-}
-
-
-/* Sets the watchdog to the correct value
- *
- * params : ii is the sleep time. Values are:
- * 0=16ms, 1=32ms,2=64ms,3=128ms,4=250ms,5=500ms, 6=1 sec,7=2 sec, 8=4 sec, 9= 8sec
- */
-void setup_watchdog(int ii) {
-    byte bb;
-    int ww;
-
-    if(ii > 9){
-        ii = 9;
-    }
-    bb = ii & 7;
-    if(ii > 7) {
-        bb |= (1<<5);
-    }
-    bb |= (1<<WDCE);
-    ww = bb;
-
-    MCUSR &= ~(1<<WDRF);
-    // start timed sequence
-    WDTCSR |= (1<<WDCE) | (1<<WDE);
-    // set new watchdog timeout value
-    WDTCSR = bb;
-    WDTCSR |= _BV(WDIE);
-}
-
-
-/* Watchdog Interrupt Service / is executed when watchdog timed out */
-ISR(WDT_vect) {
-    // Set the global flag
-    f_wdt = 1;
-}
-
-
-/***************************************************************
- *                          MAIN
-****************************************************************/
-
-void setup() {
-    if(DEBUG) {
-        Serial.begin(SERIAL_SPEED);
-        Serial.println("CitizenWatt sensor.");
-        Serial.println("citizenwatt.paris");
-        Serial.println("Configuration:");
-        Serial.println("===============");
-        Serial.print("nRf speed: ");
-        if(NRF_SPEED == RF24_250KBPS) Serial.print("250 kbps");
-        if(NRF_SPEED == RF24_1MBPS) Serial.print("1 mbps");
-        if(NRF_SPEED == RF24_2MBPS) Serial.print("2 mbps");
-        Serial.println();
-        Serial.print("nRf PA level: ");
-        if(NRF_PA_LEVEL == RF24_PA_MIN) Serial.print("-18dBm");
-        if(NRF_PA_LEVEL == RF24_PA_LOW) Serial.print("-12dBm");
-        if(NRF_PA_LEVEL == RF24_PA_HIGH) Serial.print("-6dBm");
-        if(NRF_PA_LEVEL == RF24_PA_MAX) Serial.print("0dBm");
-        Serial.println();
-        Serial.println("===============");
-        Serial.println("Starting measuring.");
-        Serial.println("I\tV\tBattery");
-    }
-
-    // Initialize nRF
-    radio.begin();
-    radio.setChannel(NRF_CHANNEL);
-    // Max number of retries and max delay between them
-    radio.setRetries(15, 15);
-    // Reduce payload size to improve reliability
-    radio.setPayloadSize(8);
-    // Set the datarate
-    radio.setDataRate(NRF_SPEED);
-    // Use the largest CRC
-    radio.setCRCLength(RF24_CRC_16);
-    // Ensure auto ACK is enabled
-    radio.setAutoAck(1);
-    // Use the best PA level
-    radio.setPALevel(NRF_PA_LEVEL);
-    // Open writing pipe
-    radio.openWritingPipe(pipe);
-
-    // Power down mode
-    cbi(SMCR, SE);
-    cbi(SMCR, SM0);
-    sbi(SMCR, SM1);
-    cbi(SMCR, SM2);
-
-    setup_watchdog(9);
-}
-
-void loop() {
-    if (1 == f_wdt) {  // wait for timed out watchdog / flag is set when a watchdog timeout occurs
-        // Check that sensor is ready
-        if(!settled && millis() > FILTER_SETTLE_TIME) {
-            settled = 1;
-        }
-
-        nrf.intensity = readI(NUMBER_SAMPLES_I);
-        if(settled) {
-            f_wdt = 0; // reset flag
-            if(0 == VOLTAGE) {
-                nrf.voltage = readV(EXTERNAL);
-            } else {
-                nrf.voltage = VOLTAGE;
-            }
-            nrf.battery = readV(VCC);
-
-            if(DEBUG) {
-                Serial.print(nrf.intensity);
-                Serial.print("\t");
-                Serial.print(nrf.voltage);
-                Serial.print("\t");
-                Serial.print(nrf.battery);
-                Serial.print("\t");
-                Serial.println();
-            }
-
-            // Send RF data
-            sendRfData();
-            
-            system_sleep();
-        }
-    }
-}
