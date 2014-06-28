@@ -1,25 +1,35 @@
-/* CitizenWatt sensor code
+/*
+ Copyright (C) 2011 J. Coliz <maniacbug@ymail.com>
+
+ This program is free software; you can redistribute it and/or
+ modify it under the terms of the GNU General Public License
+ version 2 as published by the Free Software Foundation.
+ 
+ TMRh20 2014 - Updates to the library allow sleeping both in TX and RX modes:
+      TX Mode: The radio can be powered down (.9uA current) and the Arduino slept using the watchdog timer
+      RX Mode: The radio can be left in standby mode (22uA current) and the Arduino slept using an interrupt pin
+ */
+
+/**
+ * Example RF Radio Ping Pair which Sleeps between Sends
  *
- * TODO:
- *      License and cie
- *      Deactivate TWI, BOD
- *      Bug with sleep and serial ?
- *      nRF not working ?
- *      Various TODOs in file
+ * This is an example of how to use the RF24 class to create a battery-
+ * efficient system.  It is just like the GettingStarted_CallResponse example, but the
+ * ping node powers down the radio and sleeps the MCU after every
+ * ping/pong cycle, and the receiver sleeps between payloads.
  *
- * NEED:
- *      RF24 lib from https://github.com/TMRh20/RF24/
- *
- * THANKS:
- *      Code for the sleep mode from http://interface.khm.de/index.php/lab/experiments/sleep_watchdog_battery/
+ * Write this sketch to two different nodes,
+ * connect the role_pin to ground on one.  The ping node sends the current
+ * time to the pong node, which responds by sending the value back.  The ping
+ * node can then see how long the whole cycle took.
  */
 
 #include <SPI.h>
-#include <avr/wdt.h>
 #include <avr/sleep.h>
 #include <avr/power.h>
 #include "nRF24L01.h"
 #include "RF24.h"
+#include "EmonLib.h"
 
 #ifndef cbi
 #define cbi(sfr, bit) (_SFR_BYTE(sfr) &= ~_BV(bit))
@@ -73,38 +83,168 @@ const int VOLTAGE_PIN = 0;
 // Calibration factor for the intensity
 const double ICAL = 111.1;
 
-// Radio pipe addresses for the 2 nodes to communicate.
-const uint64_t pipe = 0xE056D446D0LL;
-
-
-/***************************************************************
- *                      GLOBAL VARS 
-****************************************************************/
-
-// Watchdog state
-volatile boolean f_wdt = 1;
 
 // Struct to send RF data
 typedef struct {
-    int intensity;
-    int voltage;
-    int battery;
+    int power;
 } PayloadTX;
 
 // Next measurement to be sent
-PayloadTX nrf = {0, 0, 0};
+PayloadTX nrf = {0};
 
-// Set up nrf24L01 radio
+EnergyMonitor ct1;
+
+
+// Set up nRF24L01 radio on SPI bus plus pins 9 & 10
 RF24 radio(9,10);
 
-// Wether we are ready to send the measure or not.
-// Store it because millis reinitialize after 50 days.
-int settled = 0;
+const uint64_t pipes[2] = { 0xF0F0F0F0E1LL, 0xF0F0F0F0D2LL };   // Radio pipe addresses for the 2 nodes to communicate.
+
+// Sleep declarations
+typedef enum { wdt_16ms = 0, wdt_32ms, wdt_64ms, wdt_128ms, wdt_250ms, wdt_500ms, wdt_1s, wdt_2s, wdt_4s, wdt_8s } wdt_prescalar_e;
+
+void setup_watchdog(uint8_t prescalar);
+void do_sleep(void);
+
+const short sleep_cycles_per_transmission = 4;
+volatile short sleep_cycles_remaining = sleep_cycles_per_transmission;
+
+void setup(){
+  Serial.begin(SERIAL_SPEED);
+  Serial.println("CitizenWatt sensor.");
+  Serial.println("citizenwatt.paris");
+  Serial.println("Configuration:");
+  Serial.println("===============");
+  Serial.print("nRf speed: ");
+  if(NRF_SPEED == RF24_250KBPS) Serial.print("250 kbps");
+  if(NRF_SPEED == RF24_1MBPS) Serial.print("1 mbps");
+  if(NRF_SPEED == RF24_2MBPS) Serial.print("2 mbps");
+  Serial.println();
+  Serial.print("nRf PA level: ");
+  if(NRF_PA_LEVEL == RF24_PA_MIN) Serial.print("-18dBm");
+  if(NRF_PA_LEVEL == RF24_PA_LOW) Serial.print("-12dBm");
+  if(NRF_PA_LEVEL == RF24_PA_HIGH) Serial.print("-6dBm");
+  if(NRF_PA_LEVEL == RF24_PA_MAX) Serial.print("0dBm");
+  Serial.println();
+  Serial.println("===============");
+  Serial.println("Starting measuring.");
+  Serial.println("I\tV\tPower");
+
+  // Prepare sleep parameters
+  // Only the ping out role uses WDT.  Wake up every 4s to send a ping
+  //if ( role == role_ping_out )
+    //setup_watchdog(wdt_4s);
+
+  // Setup and configure rf radio
+
+  radio.begin();
+  radio.setRetries(15,15);
+
+  // Open pipes to other nodes for communication
+
+  // This simple sketch opens two pipes for these two nodes to communicate
+  // back and forth.
+  // Open 'our' pipe for writing
+  // Open the 'other' pipe for reading, in position #1 (we can have up to 5 pipes open for reading)
+
+    radio.openWritingPipe(pipes[0]);
+    //radio.openReadingPipe(1,pipes[1]);
+
+  // Start listening
+  radio.startListening();
+
+  // Dump the configuration of the rf unit for debugging
+  //radio.printDetails();
+  
+  ct1.currentTX(0, ICAL);
+}
+
+void loop(){
+        nrf.power = ct1.calcIrms(1480) * 240.0;
+
+        Serial.print(nrf.power);
+        Serial.print("\t");
+        Serial.println();
+        
+  
+    //radio.powerUp();                                // Power up the radio after sleeping
+    radio.stopListening();                          // First, stop listening so we can talk.
+                         
+    Serial.print("Now sending... \n\r");
+    
+    bool ok = radio.write(&nrf, sizeof(PayloadTX));
+    
+   /* unsigned long started_waiting_at = millis();    // Wait here until we get a response, or timeout (250ms)
+    bool timeout = false;
+    while ( ! radio.available()  ){
+        if (millis() - started_waiting_at > 250 ){  // Break out of the while loop if nothing available
+          timeout = true;
+          break;
+        }
+    }
+    
+    if ( timeout ) {                                // Describe the results
+        Serial.print("Failed, response timed out.\n\r");
+    }*/
+    // Shut down the system
+    delay(500);                     // Experiment with some delay here to see if it has an effect
+                                    // Power down the radio.  
+    //radio.powerDown();              // NOTE: The radio MUST be powered back up again manually
+
+                                    // Sleep the MCU.
+     // do_sleep();
 
 
-/***************************************************************
- *                       FUNCTIONS
-****************************************************************/
+}
+
+
+/*void wakeUp(){
+  sleep_disable();
+}
+
+// Sleep helpers
+
+//Prescaler values
+// 0=16ms, 1=32ms,2=64ms,3=125ms,4=250ms,5=500ms
+// 6=1 sec,7=2 sec, 8=4 sec, 9= 8sec
+
+void setup_watchdog(uint8_t prescalar){
+
+  uint8_t wdtcsr = prescalar & 7;
+  if ( prescalar & 8 )
+    wdtcsr |= _BV(WDP3);
+  MCUSR &= ~_BV(WDRF);                      // Clear the WD System Reset Flag
+  WDTCSR = _BV(WDCE) | _BV(WDE);            // Write the WD Change enable bit to enable changing the prescaler and enable system reset
+  WDTCSR = _BV(WDCE) | wdtcsr | _BV(WDIE);  // Write the prescalar bits (how long to sleep, enable the interrupt to wake the MCU
+}
+
+ISR(WDT_vect)
+{
+  //--sleep_cycles_remaining;
+  Serial.println("WDT");
+}
+
+void do_sleep(void)
+{
+  set_sleep_mode(SLEEP_MODE_PWR_DOWN); // sleep mode is set here
+  sleep_enable();
+  attachInterrupt(0,wakeUp,LOW);
+  WDTCSR |= _BV(WDIE);
+  sleep_mode();                        // System sleeps here
+                                       // The WDT_vect interrupt wakes the MCU from here
+  sleep_disable();                     // System continues execution here when watchdog timed out  
+  detachInterrupt(0);  
+  WDTCSR &= ~_BV(WDIE);  
+}*/
+
+/* Returns the measured intensity (root mean squared)
+ *
+ * params : samples_number is the number of samples used for averaging
+ * See http://openenergymonitor.org/emon/buildingblocks/digital-filters-for-offset-removal
+ *
+ * TODO: Use integer arithmetic
+ */
+
 
 /* Returns the battery voltage
  * 
@@ -125,195 +265,3 @@ int readV(int mux) {
     return result;
 }
 
-
-/* Returns the measured intensity (root mean squared)
- *
- * params : samples_number is the number of samples used for averaging
- * See http://openenergymonitor.org/emon/buildingblocks/digital-filters-for-offset-removal
- *
- * TODO: Use integer arithmetic
- */
-int readI(int samples_number) {
-    int sample_I = 0;
-    int last_sample_I = 0;
-    int filtered_I = 0;
-    int last_filtered_I = 0;
-    int sum_I = 0;
-
-    for (int n = 0; n < samples_number; n++) {
-        last_sample_I = sample_I;
-        sample_I = analogRead(CURRENT_PIN);
-        last_filtered_I = filtered_I;
-        filtered_I = 0.996 * (last_filtered_I + sample_I - last_sample_I);
-
-        sum_I += filtered_I * filtered_I;
-    }
-
-    return ICAL * sqrt(sum_I / samples_number);
-}
-
-
-/* Sends the data through nRF
- *
- * Auto ACK is enabled so if ok is true, transmission was successful
- */
-int sendRfData() {
-    radio.powerUp();
-    bool ok = radio.write(&nrf, sizeof(PayloadTX));
-
-    if(DEBUG) {
-        if(ok) {
-            Serial.println("Data sent through nRF.");
-        } else {
-            Serial.println("Data sending failed…");
-        }
-    }
-    radio.powerDown();
-
-    // If unable to send data, return -1
-    return (int) ok;
-}
-
-
-/* Sets system into the sleep state. System wakes up when watchdog is timed out.*/
-void system_sleep() {
-    // Disable ADC
-    cbi(ADCSRA, ADEN);
-
-    set_sleep_mode(SLEEP_MODE_PWR_DOWN);
-    sleep_enable();
-
-    // Sleep
-    sleep_mode();
-
-    // System restarts here when timed out
-    sleep_disable();
-    // Enable ADC
-    sbi(ADCSRA, ADEN);
-
-}
-
-
-/* Sets the watchdog to the correct value
- *
- * params : ii is the sleep time. Values are:
- * 0=16ms, 1=32ms,2=64ms,3=128ms,4=250ms,5=500ms, 6=1 sec,7=2 sec, 8=4 sec, 9= 8sec
- */
-void setup_watchdog(int ii) {
-    byte bb;
-    int ww;
-
-    if(ii > 9){
-        ii = 9;
-    }
-    bb = ii & 7;
-    if(ii > 7) {
-        bb |= (1<<5);
-    }
-    bb |= (1<<WDCE);
-    ww = bb;
-
-    MCUSR &= ~(1<<WDRF);
-    // start timed sequence
-    WDTCSR |= (1<<WDCE) | (1<<WDE);
-    // set new watchdog timeout value
-    WDTCSR = bb;
-    WDTCSR |= _BV(WDIE);
-}
-
-
-/* Watchdog Interrupt Service / is executed when watchdog timed out */
-ISR(WDT_vect) {
-    // Set the global flag
-    f_wdt = 1;
-}
-
-
-/***************************************************************
- *                          MAIN
-****************************************************************/
-
-void setup() {
-    if(DEBUG) {
-        Serial.begin(SERIAL_SPEED);
-        Serial.println("CitizenWatt sensor.");
-        Serial.println("citizenwatt.paris");
-        Serial.println("Configuration:");
-        Serial.println("===============");
-        Serial.print("nRf speed: ");
-        if(NRF_SPEED == RF24_250KBPS) Serial.print("250 kbps");
-        if(NRF_SPEED == RF24_1MBPS) Serial.print("1 mbps");
-        if(NRF_SPEED == RF24_2MBPS) Serial.print("2 mbps");
-        Serial.println();
-        Serial.print("nRf PA level: ");
-        if(NRF_PA_LEVEL == RF24_PA_MIN) Serial.print("-18dBm");
-        if(NRF_PA_LEVEL == RF24_PA_LOW) Serial.print("-12dBm");
-        if(NRF_PA_LEVEL == RF24_PA_HIGH) Serial.print("-6dBm");
-        if(NRF_PA_LEVEL == RF24_PA_MAX) Serial.print("0dBm");
-        Serial.println();
-        Serial.println("===============");
-        Serial.println("Starting measuring.");
-        Serial.println("I\tV\tBattery");
-    }
-
-    // Initialize nRF
-    radio.begin();
-    radio.setChannel(NRF_CHANNEL);
-    // Max number of retries and max delay between them
-    radio.setRetries(15, 15);
-    // Reduce payload size to improve reliability
-    radio.setPayloadSize(8);
-    // Set the datarate
-    radio.setDataRate(NRF_SPEED);
-    // Use the largest CRC
-    radio.setCRCLength(RF24_CRC_16);
-    // Ensure auto ACK is enabled
-    radio.setAutoAck(1);
-    // Use the best PA level
-    radio.setPALevel(NRF_PA_LEVEL);
-    // Open writing pipe
-    radio.openWritingPipe(pipe);
-
-    // Power down mode
-    cbi(SMCR, SE);
-    cbi(SMCR, SM0);
-    sbi(SMCR, SM1);
-    cbi(SMCR, SM2);
-
-    setup_watchdog(9);
-}
-
-void loop() {
-    if (1 == f_wdt) {  // wait for timed out watchdog / flag is set when a watchdog timeout occurs
-        // Check that sensor is ready
-        if(!settled && millis() > FILTER_SETTLE_TIME) {
-            settled = 1;
-        }
-
-        nrf.intensity = readI(NUMBER_SAMPLES_I);
-        if(settled) {
-            f_wdt = 0; // reset flag
-            if(0 == VOLTAGE) {
-                nrf.voltage = readV(EXTERNAL);
-            } else {
-                nrf.voltage = VOLTAGE;
-            }
-            nrf.battery = readV(VCC);
-
-            if(DEBUG) {
-                Serial.print(nrf.intensity);
-                Serial.print("\t");
-                Serial.print(nrf.voltage);
-                Serial.print("\t");
-                Serial.print(nrf.battery);
-                Serial.print("\t");
-                Serial.println();
-            }
-
-            // Send RF data
-            sendRfData();
-            
-            system_sleep();
-        }
-    }
-}
