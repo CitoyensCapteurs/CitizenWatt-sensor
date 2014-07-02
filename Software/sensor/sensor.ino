@@ -26,7 +26,6 @@
 // SERIAL_BAUDRATE is for setting the baudrate for serial communication
 char input;
 int inMenu = 0;
-int SERIAL_BAUDRATE;
 #define BAUDRATE_EEPROM 7
 
 // Time (ms) to allow the filters to settle before sending data
@@ -116,9 +115,12 @@ volatile short sleep_cycles_remaining = sleep_cycles_per_transmission;
 
 void setup(void)
 {
-  const int SERIAL_BAUDRATE = EEPROM.read(BAUDRATE_EEPROM);
+  long int SERIAL_BAUDRATE = EEPROM.read(BAUDRATE_EEPROM);
 
-  Serial.begin(57600);
+  if(255 == SERIAL_BAUDRATE) {
+      SERIAL_BAUDRATE = 57600;
+  }
+  Serial.begin(SERIAL_BAUDRATE);
   Serial.println(F("/!\\ STARTING CitizenOS"));
 
   // Read the config stored on EEPROM
@@ -151,7 +153,7 @@ void setup(void)
   // Prepare sleep parameters
   //
 
-  setup_watchdog(wdt_2s); // /!\ 2s sleeping
+// TODO  setup_watchdog(wdt_2s); // /!\ 2s sleeping
 
   //
   // Setup and configure rf radio
@@ -225,7 +227,7 @@ void load(int nrf_speed_eeprom, int nrf_pa_level_eeprom, int nrf_channel_eeprom,
       Serial.println(F("[+] Successfully set nRF power to 0 dBm"));
       break;
   }
-  
+
   switch(pipe_eeprom) {
     case '1':
       Serial.println(F("[+] Successfully set pipe address to 0xE056D446D0LL"));
@@ -245,9 +247,9 @@ void load(int nrf_speed_eeprom, int nrf_pa_level_eeprom, int nrf_channel_eeprom,
       break;
   }
 
-  switch(ical_eeprom) {  
+  switch(ical_eeprom) {
   }
-  
+
   NRF_CHANNEL = nrf_channel_eeprom;
   Serial.print(F("[+] Successfully set nrf channel to "));
   Serial.println(NRF_CHANNEL);
@@ -314,24 +316,24 @@ void loop(void)
     }
 
     //
-    // Shut down the system
+    // Shut down the system TODO \/
     //
 
     // Experiment with some delay here to see if it has an effect
-    delay(500);
+    //delay(500);
 
     // Power down the radio.  Note that the radio will get powered back up
     // on the next write() call.
-    radio.powerDown();
-  
+//    radio.powerDown();
+
     // Sleep the MCU.  The watchdog timer will awaken in a short while, and
     // continue execution here.
-    while( sleep_cycles_remaining )
-      do_sleep();
+//    while( sleep_cycles_remaining )
+//      do_sleep();
 
-    sleep_cycles_remaining = sleep_cycles_per_transmission;
-    delay(1000);
-  
+//    sleep_cycles_remaining = sleep_cycles_per_transmission;
+//    delay(1000);
+
   }
 }
 
@@ -340,11 +342,11 @@ void loop(void)
 /////////////////////////////
 
 void menu() {
-  
+
   String result = "";
-  int resultLength;
+  int resultLength = 11;
   int resultat;
-  
+
   if(inMenu == 1) {
     unsigned long time = millis();
     while((!Serial.available()) && (millis() - time < 30000)) { }
@@ -383,8 +385,8 @@ void menu() {
     while(!Serial.available()) { }
     input = Serial.read();
     Serial.println(input);
+    char CharSwitch[resultLength];
     switch(input) {
-        
       case '1':
         Serial.println(F("[*] nRF speed in Kbps (1 for 250, 2 for 1024 or 3 for 2048) : "));
         while(!Serial.available()) {}
@@ -393,7 +395,7 @@ void menu() {
         Serial.println(F("[*] Press 'y' to confirm"));
         inMenu = 1;
         break;
-  
+
       case '2':
         Serial.println(F("[!] WARNING : changing PA level can considerably increase power consumption !"));
         Serial.println(F("[*] nRF PA level (1 for -18, 2 for -12, 3 for -6 or 4 for 0 dBm) : "));
@@ -403,77 +405,73 @@ void menu() {
         Serial.println(F("[*] Press 'y' to confirm"));
         inMenu = 1;
         break;
-  
+
       case '3':
         Serial.println(F("[*] serial baudrate : "));
         while(!Serial.available()) {}
         result = "";
         while(Serial.available()) { result.concat((char)Serial.read()); }
         resultLength = result.length()+1;
-        char Char13[resultLength];
-        result.toCharArray(Char13,resultLength);
-        resultat = atoi(Char13)*2; 
+        result.toCharArray(CharSwitch,resultLength);
+        resultat = atoi(CharSwitch)*2;
         EEPROM.write(BAUDRATE_EEPROM, resultat);
         Serial.println(F("[*] Press 'y' to confirm"));
         inMenu = 1;
         break;
-  
+
       case '4':
         Serial.println(F("[*] nRF channel : "));
         while(!Serial.available()) {}
         result = "";
         while(Serial.available()) { result.concat((char)Serial.read()); }
         resultLength = result.length()+1;
-        char Char14[resultLength];
-        result.toCharArray(Char14,resultLength);
-        resultat = atoi(Char14)*2; 
+        result.toCharArray(CharSwitch,resultLength);
+        resultat = atoi(CharSwitch)*2;
         EEPROM.write(NRF_CHANNEL_EEPROM, resultat);
         Serial.println(F("[*] Press 'y' to confirm"));
         inMenu = 1;
        break;
-  
+
       case '5':
         Serial.println(F("[*] mean voltage : "));
         while(!Serial.available()) {}
         result = "";
         while(Serial.available()) { result.concat((char)Serial.read()); }
         resultLength = result.length()+1;
-        char Char15[resultLength];
-        result.toCharArray(Char15,resultLength);
-        resultat = atoi(Char15)*2; 
+        result.toCharArray(CharSwitch,resultLength);
+        resultat = atoi(CharSwitch)*2;
         EEPROM.write(VOLTAGE_EEPROM, resultat);
         Serial.println(F("[*] Press 'y' to confirm"));
         inMenu = 1;
         break;
-  
+
       case '6':
         Serial.println(F("[*] number of samples : "));
         while(!Serial.available()) {}
         result = "";
         while(Serial.available()) { result.concat((char)Serial.read()); }
         resultLength = result.length()+1;
-        char Char16[resultLength];
-        result.toCharArray(Char16,resultLength);
-        resultat = atoi(Char16)*2; 
+        result.toCharArray(CharSwitch,resultLength);
+        resultat = atoi(CharSwitch)*2;
         EEPROM.write(NUMBER_SAMPLES_I_EEPROM, resultat);
         Serial.println(F("[*] Press 'y' to confirm"));
         inMenu = 1;
         break;
-  
+
       case '7':
         inMenu = 1;
         Serial.println(F("[*] Press 'y' to confirm"));
         break;
-  
+
       case '8':
         inMenu = 1;
         Serial.println(F("[*] Press 'y' to confirm"));
-        break;        
-              
-      case '9':      
+        break;
+
+      case '9':
         inMenu = -1;
         break;
-        
+
     }
   }
 }
