@@ -386,6 +386,7 @@ void menu() {
     input = Serial.read();
     Serial.println(input);
     char CharSwitch[resultLength];
+    // TODO : Refactor this because resultLength is not used in the test cases
     switch(input) {
       case '1':
         Serial.println(F("[*] nRF speed in Kbps (1 for 250, 2 for 1024 or 3 for 2048) : "));
