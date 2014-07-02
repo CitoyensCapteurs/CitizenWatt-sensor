@@ -69,7 +69,8 @@ double ICAL = 111.1;
 #define ICAL_EEPROM 5
 
 // Radio pipe addresses for the 2 nodes to communicate.
-uint64_t pipe = 0xE056D446D0LL;
+uint64_t pipes[2] = { 0xE056D446D0LL, 0xF0F0F0F0D2LL };
+
 #define PIPE_EEPROM 6
 
 
@@ -87,7 +88,7 @@ typedef struct {
 } PayloadTX;
 
 // Next measurement to be sent
-PayloadTX nrf = {0, 0, 0};
+PayloadTX nrf = {15, 16, 17};
 
 ////////////////////////////////
 //   Hardware configuration   //
@@ -115,6 +116,8 @@ volatile short sleep_cycles_remaining = sleep_cycles_per_transmission;
 
 void setup(void)
 {
+  const int SERIAL_BAUDRATE = EEPROM.read(BAUDRATE_EEPROM);
+
   Serial.begin(57600);
   Serial.println(F("/!\\ STARTING CitizenOS"));
 
@@ -126,7 +129,7 @@ void setup(void)
   int number_samples_i_eeprom = EEPROM.read(NUMBER_SAMPLES_I_EEPROM);
   int ical_eeprom = EEPROM.read(ICAL_EEPROM);
   int pipe_eeprom = EEPROM.read(PIPE_EEPROM);
-  int baudrate_eeprom = EEPROM.read(BAUDRATE_EEPROM);
+  delay(1000);
 
   Serial.println(F("//////////////////////////////"));
   Serial.println(F("//    CitizenWatt sensor    //"));
@@ -138,7 +141,7 @@ void setup(void)
   // Load the config
   load(nrf_speed_eeprom, nrf_pa_level_eeprom, nrf_channel_eeprom,
        voltage_eeprom, number_samples_i_eeprom, ical_eeprom,
-       pipe_eeprom, baudrate_eeprom);
+       pipe_eeprom);
 
   Serial.println();
   Serial.println(F("[+] Go to the config menu ? y/[n] - autostart in 30s"));
@@ -177,7 +180,8 @@ void setup(void)
   radio.setPALevel(NRF_PA_LEVEL);
 
   // Open writing pipe
-  radio.openWritingPipe(0xE056D446D0LL);
+  radio.openWritingPipe(pipes[0]);
+  radio.openReadingPipe(1, pipes[1]);
 
   //
   // Start listening
@@ -187,7 +191,7 @@ void setup(void)
 }
 
 void load(int nrf_speed_eeprom, int nrf_pa_level_eeprom, int nrf_channel_eeprom, int voltage_eeprom,
-         int number_samples_i_eeprom, int ical_eeprom, int pipe_eeprom, int baudrate_eeprom)
+         int number_samples_i_eeprom, int ical_eeprom, int pipe_eeprom)
 {
   switch(nrf_speed_eeprom) {
     case '1':
@@ -221,101 +225,42 @@ void load(int nrf_speed_eeprom, int nrf_pa_level_eeprom, int nrf_channel_eeprom,
       Serial.println(F("[+] Successfully set nRF power to 0 dBm"));
       break;
   }
-  switch(nrf_channel_eeprom) {
+  
+  switch(pipe_eeprom) {
     case '1':
-      Serial.println(F("[+] Successfully set nrf channel to ?"));
-      NRF_CHANNEL = 76;
+      Serial.println(F("[+] Successfully set pipe address to 0xE056D446D0LL"));
+      pipes[0] = 0xE056D446D0LL;
       break;
     case '2':
-      NRF_CHANNEL = 76;
-      Serial.println(F("[+] Successfully set nrf channel to ?"));
+      pipes[0] = 0xE056D446D0LL;
+      Serial.println(F("[+] Successfully set pipe address to 0xE056D446D0LL"));
       break;
     case '3':
-      NRF_CHANNEL = 76;
-      Serial.println(F("[+] Successfully set nrf channel to ?"));
+      pipes[0] = 0xE056D446D0LL;
+      Serial.println(F("[+] Successfully set pipe address to 0xE056D446D0LL"));
       break;
     case '4':
-      NRF_CHANNEL = 76;
-      Serial.println(F("[+] Successfully set nrf channel to ?"));
-      break;
-  }
-  switch(voltage_eeprom) {
-    case '1':
-      VOLTAGE = 210;
-      Serial.println(F("[+] Successfully set mean voltage to 210V"));
-      break;
-    case '2':
-      VOLTAGE = 220;
-      Serial.println(F("[+] Successfully set mean voltage to 220V"));
-      break;
-    case '3':
-      VOLTAGE = 230;
-      Serial.println(F("[+] Successfully set mean voltage to 230V"));
-      break;
-    case '4':
-      VOLTAGE = 240;
-      Serial.println(F("[+] Successfully set mean voltage to 240V"));
-      break;
-  }
-switch(number_samples_i_eeprom) {
-    case '1':
-      Serial.println(F("[+] Successfully set number of samples to 1470 sample/s"));
-      NUMBER_SAMPLES_I = 210;
-      break;
-    case '2':
-      NUMBER_SAMPLES_I = 220;
-      Serial.println(F("[+] Successfully set number of samples to 1480 sample/s"));
-      break;
-    case '3':
-      NUMBER_SAMPLES_I = 230;
-      Serial.println(F("[+] Successfully set number of samples to 1490 sample/s"));
-      break;
-    case '4':
-      NUMBER_SAMPLES_I = 240;
-      Serial.println(F("[+] Successfully set number of samples to 240V"));
+      pipes[0] = 0xE056D446D0LL;
+      Serial.println(F("[+] Successfully set pipe address to 0xE056D446D0LL"));
       break;
   }
 
-  /*switch(pipe_eeprom) {
-    case '1':
-      Serial.println(F("[+] Successfully set pipe address to 0xE056D446D0LL"));
-      pipe = 0xE056D446D0LL;
-      break;
-    case '2':
-      pipe = 0xE056D446D0LL;
-      Serial.println(F("[+] Successfully set pipe address to 0xE056D446D0LL"));
-      break;
-    case '3':
-      pipe = 0xE056D446D0LL;
-      Serial.println(F("[+] Successfully set pipe address to 0xE056D446D0LL"));
-      break;
-    case '4':
-      pipe = 0xE056D446D0LL;
-      Serial.println(F("[+] Successfully set pipe address to 0xE056D446D0LL"));
-      break;
-  }*/
-
-  /*switch(ical_eeprom) {  //TODO
+  switch(ical_eeprom) {  
   }
+  
+  NRF_CHANNEL = nrf_channel_eeprom;
+  Serial.print(F("[+] Successfully set nrf channel to "));
+  Serial.println(NRF_CHANNEL);
 
-  switch(baudrate_eeprom) {
-    case '1':
-      Serial.println(F("[+] Successfully set baudrate to 9600 baud"));
-      SERIAL_BAUDRATE = 9600;
-      break;
-    case '2':
-      SERIAL_BAUDRATE = 19200;
-      Serial.println(F("[+] Successfully set baudrate to 19200 baud"));
-      break;
-    case '3':
-      SERIAL_BAUDRATE = 57600;
-      Serial.println(F("[+] Successfully set baudrate to 57600 baud"));
-      break;
-    case '4':
-      SERIAL_BAUDRATE = 115200;
-      Serial.println(F("[+] Successfully set baudrate to 115200 baud"));
-      break;
-  }   */
+  VOLTAGE = voltage_eeprom;
+  Serial.print(F("[+] Successfully set mean voltage to "));
+  Serial.print(VOLTAGE);
+  Serial.println(F(" V"));
+
+  NUMBER_SAMPLES_I = number_samples_i_eeprom;
+  Serial.print(F("[+] Successfully set number of samples to " ));
+  Serial.print(NUMBER_SAMPLES_I);
+  Serial.println(F(" sample/s"));
 
 }
 
@@ -334,18 +279,18 @@ void loop(void)
     //
 
     // First, stop listening so we can talk.
-    //radio.stopListening();
+    radio.stopListening();
 
     Serial.print("|");
-    //Serial.print(nrf.intensity);
+    Serial.print(nrf.intensity);
     Serial.print("\t");
     Serial.print("|");
     Serial.print("\t");
-    //Serial.print(nrf.voltage);
+    Serial.print(nrf.voltage);
     Serial.print("\t");
     Serial.print("|");
     Serial.print("\t");
-    //Serial.print(nrf.battery);
+    Serial.print(nrf.battery);
     Serial.print("\t");
     Serial.print("|");
     Serial.println();
@@ -378,7 +323,7 @@ void loop(void)
     // Power down the radio.  Note that the radio will get powered back up
     // on the next write() call.
     radio.powerDown();
-  /*
+  
     // Sleep the MCU.  The watchdog timer will awaken in a short while, and
     // continue execution here.
     while( sleep_cycles_remaining )
@@ -386,7 +331,7 @@ void loop(void)
 
     sleep_cycles_remaining = sleep_cycles_per_transmission;
     delay(1000);
-  */
+  
   }
 }
 
@@ -395,6 +340,11 @@ void loop(void)
 /////////////////////////////
 
 void menu() {
+  
+  String result = "";
+  int resultLength;
+  int resultat;
+  
   if(inMenu == 1) {
     unsigned long time = millis();
     while((!Serial.available()) && (millis() - time < 30000)) { }
@@ -421,130 +371,113 @@ void menu() {
   }
 
   if(inMenu == -1) {
-    Serial.println("===============");
-    Serial.println("Starting measuring.");
+    Serial.println(F("==================="));
+    Serial.println(F("Starting measuring."));
     Serial.println();
-    Serial.println("|I\t|\tV\t|\tBattery |");
-    Serial.print("|");
-    //Serial.println(inMenu);
-    //Serial.print(nrf.intensity);
-    Serial.print("\t");
-    Serial.print("|");
-    Serial.print("\t");
-    //Serial.print(nrf.voltage);
-    Serial.print("\t");
-    Serial.print("|");
-    Serial.print("\t");
-    //Serial.print(nrf.battery);
-    Serial.print("\t");
-    Serial.print("|");
+    Serial.println(F("|I\t|\tV\t|\tBattery |"));
     Serial.println();
     inMenu = 0;
   }
 
-  switch(inMenu) {
-    case 2:
-      while(!Serial.available()) { }
-      input = Serial.read();
-      Serial.println(input);
-      switch(input) {
+  if(inMenu == 2) {
+    while(!Serial.available()) { }
+    input = Serial.read();
+    Serial.println(input);
+    switch(input) {
+        
       case '1':
-        inMenu = 11;
+        Serial.println(F("[*] nRF speed in Kbps (1 for 250, 2 for 1024 or 3 for 2048) : "));
+        while(!Serial.available()) {}
+        input = Serial.read();
+        EEPROM.write(NRF_SPEED_EEPROM, (int)input);
+        Serial.println(F("[*] Press 'y' to confirm"));
+        inMenu = 1;
         break;
+  
       case '2':
-        inMenu = 12;
+        Serial.println(F("[!] WARNING : changing PA level can considerably increase power consumption !"));
+        Serial.println(F("[*] nRF PA level (1 for -18, 2 for -12, 3 for -6 or 4 for 0 dBm) : "));
+        while(!Serial.available()) {}
+        input = Serial.read();
+        EEPROM.write(NRF_PA_LEVEL_EEPROM, (int)input);
+        Serial.println(F("[*] Press 'y' to confirm"));
+        inMenu = 1;
         break;
+  
       case '3':
-        inMenu = 13;
+        Serial.println(F("[*] serial baudrate : "));
+        while(!Serial.available()) {}
+        result = "";
+        while(Serial.available()) { result.concat((char)Serial.read()); }
+        resultLength = result.length()+1;
+        char Char13[resultLength];
+        result.toCharArray(Char13,resultLength);
+        resultat = atoi(Char13)*2; 
+        EEPROM.write(BAUDRATE_EEPROM, resultat);
+        Serial.println(F("[*] Press 'y' to confirm"));
+        inMenu = 1;
         break;
+  
       case '4':
-        inMenu = 14;
-        break;
+        Serial.println(F("[*] nRF channel : "));
+        while(!Serial.available()) {}
+        result = "";
+        while(Serial.available()) { result.concat((char)Serial.read()); }
+        resultLength = result.length()+1;
+        char Char14[resultLength];
+        result.toCharArray(Char14,resultLength);
+        resultat = atoi(Char14)*2; 
+        EEPROM.write(NRF_CHANNEL_EEPROM, resultat);
+        Serial.println(F("[*] Press 'y' to confirm"));
+        inMenu = 1;
+       break;
+  
       case '5':
-        inMenu = 15;
+        Serial.println(F("[*] mean voltage : "));
+        while(!Serial.available()) {}
+        result = "";
+        while(Serial.available()) { result.concat((char)Serial.read()); }
+        resultLength = result.length()+1;
+        char Char15[resultLength];
+        result.toCharArray(Char15,resultLength);
+        resultat = atoi(Char15)*2; 
+        EEPROM.write(VOLTAGE_EEPROM, resultat);
+        Serial.println(F("[*] Press 'y' to confirm"));
+        inMenu = 1;
         break;
+  
       case '6':
-        inMenu = 16;
+        Serial.println(F("[*] number of samples : "));
+        while(!Serial.available()) {}
+        result = "";
+        while(Serial.available()) { result.concat((char)Serial.read()); }
+        resultLength = result.length()+1;
+        char Char16[resultLength];
+        result.toCharArray(Char16,resultLength);
+        resultat = atoi(Char16)*2; 
+        EEPROM.write(NUMBER_SAMPLES_I_EEPROM, resultat);
+        Serial.println(F("[*] Press 'y' to confirm"));
+        inMenu = 1;
         break;
+  
       case '7':
-        inMenu = 17;
+        inMenu = 1;
+        Serial.println(F("[*] Press 'y' to confirm"));
         break;
+  
       case '8':
-        inMenu = 18;
-        break;
-      case '9':
+        inMenu = 1;
+        Serial.println(F("[*] Press 'y' to confirm"));
+        break;        
+              
+      case '9':      
         inMenu = -1;
         break;
-      }
-      break;
-
-    case 11:
-      Serial.println(F("[*] nRF speed in Kbps (1 for 250, 2 for 1024 or 3 for 2048) : "));
-      while(!Serial.available()) {}
-      input = Serial.read();
-      EEPROM.write(NRF_SPEED_EEPROM, (int)input);
-      Serial.println(F("[*] Press 'y' to confirm"));
-      inMenu = 1;
-      break;
-
-    case 12:
-      Serial.println(F("[!] WARNING : changing PA level can considerably increase power consumption !"));
-      Serial.println(F("[*] nRF PA level (1 for -18, 2 for -12, 3 for -6 or 4 for 0 dBm) : "));
-      while(!Serial.available()) {}
-      input = Serial.read();
-      EEPROM.write(NRF_PA_LEVEL_EEPROM, (int)input);
-      Serial.println(F("[*] Press 'y' to confirm"));
-      inMenu = 1;
-      break;
-
-    case 13:
-      Serial.println(F("[*] serial baudrate (1 for 9600, 2 for 19200 3 for 57600 or 4 for 115200): "));
-      while(!Serial.available()) {}
-      input = Serial.read();
-      EEPROM.write(BAUDRATE_EEPROM, (int)input);
-      Serial.println(F("[*] Press 'y' to confirm"));
-      inMenu = 1;
-      break;
-
-    case 14:
-      Serial.println(F("[*] nRF channel : "));
-      while(!Serial.available()) {}
-      input = Serial.read();
-      EEPROM.write(NRF_CHANNEL_EEPROM, (int)input);
-      Serial.println(F("[*] Press 'y' to confirm"));
-      inMenu = 1;
-     break;
-
-    case 15:
-      Serial.println(F("[*] mean voltage : "));
-      while(!Serial.available()) {}
-      input = Serial.read();
-      EEPROM.write(VOLTAGE_EEPROM, (int)input);
-      Serial.println(F("[*] Press 'y' to confirm"));
-      inMenu = 1;
-      break;
-
-    case 16:
-      Serial.println(F("[*] number of samples : "));
-      while(!Serial.available()) {}
-      input = Serial.read();
-      EEPROM.write(NUMBER_SAMPLES_I_EEPROM, (int)input);
-      Serial.println(F("[*] Press 'y' to confirm"));
-      inMenu = 1;
-      break;
-
-    case 17:
-      inMenu = 1;
-      Serial.println(F("[*] Press 'y' to confirm"));
-      break;
-
-    case 18:
-      inMenu = 1;
-      Serial.println(F("[*] Press 'y' to confirm"));
-      break;
+        
+    }
   }
-
 }
+
 //////////////////////////
 //   Sleep functions    //
 //////////////////////////
@@ -607,7 +540,6 @@ int readV(int mux) {
     return result;
 }
 
-
 // Returns the measured intensity (root mean squared)
 //
 // params : samples_number is the number of samples used for averaging
@@ -615,6 +547,7 @@ int readV(int mux) {
 //
 // TODO: Use integer arithmetic
 //
+
 int readI(int samples_number) {
     int sample_I = 0;
     int last_sample_I = 0;
