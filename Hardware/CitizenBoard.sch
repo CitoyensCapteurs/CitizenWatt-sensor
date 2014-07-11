@@ -15890,8 +15890,8 @@ Source: avr.lbr</description>
 <hole x="0" y="-5" drill="1.6"/>
 <hole x="5" y="0" drill="1.6"/>
 <hole x="0" y="5" drill="1.6"/>
-<pad name="5T" x="5" y="5" drill="1.3"/>
-<pad name="2R" x="5" y="-5" drill="1.3"/>
+<pad name="2R" x="5" y="5" drill="1.3"/>
+<pad name="5T" x="5" y="-5" drill="1.3"/>
 <wire x1="-6.5" y1="-3" x2="-6.5" y2="3" width="0.127" layer="21"/>
 <wire x1="-6.5" y1="3" x2="-3" y2="3" width="0.127" layer="21"/>
 <wire x1="-3" y1="-3" x2="-6.5" y2="-3" width="0.127" layer="21"/>
@@ -15917,6 +15917,9 @@ Source: avr.lbr</description>
 <pin name="GND" x="7.62" y="-2.54" visible="off" length="point" swaplevel="7" rot="R180"/>
 <pin name="L" x="7.62" y="2.54" visible="off" length="point" swaplevel="7" rot="R180"/>
 <pin name="R" x="7.62" y="5.08" visible="off" length="point" swaplevel="7" rot="R180"/>
+<text x="3.81" y="-2.54" size="1.27" layer="97">GND</text>
+<text x="6.35" y="2.54" size="1.27" layer="97">L</text>
+<text x="6.35" y="5.08" size="1.27" layer="97">R</text>
 </symbol>
 </symbols>
 <devicesets>
