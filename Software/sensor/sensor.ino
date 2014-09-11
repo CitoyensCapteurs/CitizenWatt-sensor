@@ -63,6 +63,12 @@ const int CURRENT_PIN = A0;
 // Pin for voltage measurement
 const int VOLTAGE_PIN = 0;
 
+// Pin for the green LED
+const int GREEN_LED_PIN = 3;
+
+// Pin for the red LED
+const int RED_LED_PIN = 2;
+
 // Calibration factor for the intensity
 double ICAL = 111.1;
 #define ICAL_EEPROM 5
@@ -115,6 +121,11 @@ volatile short sleep_cycles_remaining = sleep_cycles_per_transmission;
 
 void setup(void)
 {
+  pinMode(RED_LED_PIN, OUTPUT);
+  pinMode(GREEN_LED_PIN, OUTPUT);
+  digitalWrite(RED_LED_PIN, HIGH);
+  digitalWrite(GREEN_LED_PIN, HIGH);
+
   long int SERIAL_BAUDRATE = EEPROM.read(BAUDRATE_EEPROM);
 
   if(255 == SERIAL_BAUDRATE) {
@@ -272,10 +283,16 @@ void load(int nrf_speed_eeprom, int nrf_pa_level_eeprom, int nrf_channel_eeprom,
 
 void loop(void)
 {
+  digitalWrite(GREEN_LED_PIN, HIGH);
   if(inMenu != 0) {
+    digitalWrite(RED_LED_PIN, HIGH);
+    digitalWrite(GREEN_LED_PIN, HIGH);
     menu();
+    digitalWrite(RED_LED_PIN, LOW);
+    digitalWrite(GREEN_LED_PIN, LOW);
   }
   else {
+    digitalWrite(GREEN_LED_PIN, HIGH);
     //
     // Data sender
     //
@@ -333,7 +350,7 @@ void loop(void)
 
 //    sleep_cycles_remaining = sleep_cycles_per_transmission;
 //    delay(1000);
-
+    digitalWrite(GREEN_LED_PIN, LOW);
   }
 }
 
