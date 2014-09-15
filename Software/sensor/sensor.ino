@@ -64,10 +64,10 @@ const int CURRENT_PIN = A0;
 const int VOLTAGE_PIN = 0;
 
 // Pin for the green LED
-const int GREEN_LED_PIN = 3;
+const int GREEN_LED_PIN = 2;
 
 // Pin for the red LED
-const int RED_LED_PIN = 2;
+const int RED_LED_PIN = 3;
 
 // Calibration factor for the intensity
 double ICAL = 111.1;
@@ -93,7 +93,7 @@ typedef struct {
 } PayloadTX;
 
 // Next measurement to be sent
-PayloadTX nrf = {15, 16, 17};
+PayloadTX nrf = {0, 0, 0};
 
 ////////////////////////////////
 //   Hardware configuration   //
@@ -132,7 +132,7 @@ void setup(void)
       SERIAL_BAUDRATE = 57600;
   }
   Serial.begin(SERIAL_BAUDRATE);
-  Serial.println(F("/!\\ STARTING CitizenOS"));
+  Serial.println(F("/!\\ STARTING CitizenWatt Sensor"));
 
   // Read the config stored on EEPROM
   int nrf_speed_eeprom = EEPROM.read(NRF_SPEED_EEPROM);
@@ -157,14 +157,14 @@ void setup(void)
        pipe_eeprom);
 
   Serial.println();
-  Serial.println(F("[+] Go to the config menu ? y/[n] - autostart in 30s"));
+  Serial.println(F("[+] Go to the config menu ? y/[n] - autostart in 10s"));
   inMenu = 1;
 
   //
   // Prepare sleep parameters
   //
 
-// TODO  setup_watchdog(wdt_2s); // /!\ 2s sleeping
+  setup_watchdog(wdt_8s); // /!\ 8s sleeping
 
   //
   // Setup and configure rf radio
@@ -283,16 +283,24 @@ void load(int nrf_speed_eeprom, int nrf_pa_level_eeprom, int nrf_channel_eeprom,
 
 void loop(void)
 {
-  digitalWrite(GREEN_LED_PIN, HIGH);
   if(inMenu != 0) {
     digitalWrite(RED_LED_PIN, HIGH);
     digitalWrite(GREEN_LED_PIN, HIGH);
     menu();
     digitalWrite(RED_LED_PIN, LOW);
     digitalWrite(GREEN_LED_PIN, LOW);
-  }
+  } 
   else {
+    //
+    // Read Current
+    //
     digitalWrite(GREEN_LED_PIN, HIGH);
+    nrf.intensity = readI(NUMBER_SAMPLES_I);
+    digitalWrite(GREEN_LED_PIN, LOW);
+    
+    // TODO : Fix battery
+//    nrf.battery = readV(1110);
+    
     //
     // Data sender
     //
@@ -300,19 +308,21 @@ void loop(void)
     // First, stop listening so we can talk.
     radio.stopListening();
 
-    Serial.print("|");
-    Serial.print(nrf.intensity);
-    Serial.print("\t");
-    Serial.print("|");
-    Serial.print("\t");
-    Serial.print(nrf.voltage);
-    Serial.print("\t");
-    Serial.print("|");
-    Serial.print("\t");
-    Serial.print(nrf.battery);
-    Serial.print("\t");
-    Serial.print("|");
-    Serial.println();
+    if( DEBUG )
+    {
+      Serial.print("|");
+      Serial.print(nrf.intensity);
+      Serial.print("\t");
+      Serial.print("|");
+      Serial.print("\t");
+      Serial.print(nrf.voltage);
+      Serial.print("\t");
+      Serial.print("|");
+      Serial.print("\t");
+      Serial.print(nrf.battery);
+      Serial.print("\t");
+      Serial.println("|");
+    }
 
     radio.write(&nrf, sizeof(PayloadTX));
 
@@ -331,27 +341,23 @@ void loop(void)
     {
       Serial.println(F("[!] Failed to send packet : response timed out ..."));
     }
-
-    //
-    // Shut down the system TODO \/
-    //
-
-    // Experiment with some delay here to see if it has an effect
-    //delay(500);
-
-    // Power down the radio.  Note that the radio will get powered back up
-    // on the next write() call.
-//    radio.powerDown();
-
-    // Sleep the MCU.  The watchdog timer will awaken in a short while, and
-    // continue execution here.
-//    while( sleep_cycles_remaining )
-//      do_sleep();
-
-//    sleep_cycles_remaining = sleep_cycles_per_transmission;
-//    delay(1000);
-    digitalWrite(GREEN_LED_PIN, LOW);
   }
+  
+  //
+  // Shut down the system
+  //
+
+  // 100ms for the MCU to settle 
+  delay(100);
+
+  // Power down the radio.  Note that the radio will get powered back up
+  // on the next write() call.
+  // TODO : Fix this !
+  //radio.powerDown();
+
+  // Sleep the MCU.  The watchdog timer will awaken in a short while, and
+  // continue execution here.
+  do_sleep();
 }
 
 /////////////////////////////
@@ -366,7 +372,7 @@ void menu() {
 
   if(inMenu == 1) {
     unsigned long time = millis();
-    while((!Serial.available()) && (millis() - time < 30000)) { }
+    while((!Serial.available()) && (millis() - time < 10000)) { }
     input = Serial.read();
     if(input == 'Y' || input == 'y') {
       Serial.println();
