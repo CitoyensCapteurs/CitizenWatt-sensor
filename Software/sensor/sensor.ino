@@ -198,7 +198,7 @@ void setup(void)
   //radio.startListening();
   
   // Init EnergyMonitor, with calibration factor for R1 = 22 Ohms
-  emon1.current(1, 90.9);
+  emon1.current(0, 90.9);
 
 }
 
