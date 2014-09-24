@@ -6,10 +6,12 @@
 #include <SPI.h>
 #include <avr/sleep.h>
 #include <avr/power.h>
-#include "nRF24L01.h"
-#include "RF24.h"
+#include <nRF24L01.h>
+#include <RF24.h>      // https://github.com/stanleyseow/RF24
 #include "printf.h"
-#include "EmonLib.h"
+#include <EmonLib.h>   // https://github.com/openenergymonitor/EmonLib
+#include <AESLib.h>    // https://github.com/DavyLandman/AESLib
+
 
 #ifndef cbi
 #define cbi(sfr, bit) (_SFR_BYTE(sfr) &= ~_BV(bit))
@@ -90,10 +92,16 @@ typedef struct {
     int power;
     int voltage;
     int battery;
+    unsigned long timer;
+    long padding4;
+    int padding2;
 } PayloadTX;
 
 // Next measurement to be sent
-PayloadTX nrf = {0, 0, 0};
+PayloadTX nrf = {0, 0, 0, 0, 0, 0};
+
+// AES
+uint8_t key[] = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15};
 
 ////////////////////////////////
 //   Hardware configuration   //
@@ -302,13 +310,9 @@ void loop(void)
     
     nrf.battery = (int) emon1.readVcc();
     
-    //
-    // Data sender
-    //
-
-    // First, stop listening so we can talk.
-    radio.stopListening();
-
+    // Adding random for AES
+    nrf.timer = millis();
+    
     if( DEBUG )
     {
       Serial.print("|");
@@ -323,8 +327,31 @@ void loop(void)
       Serial.print(nrf.battery);
       Serial.print("\t");
       Serial.println("|");
+      
+      Serial.print(F("Clear :"));      
+      PrintHex8((uint8_t*)&nrf, sizeof(PayloadTX));
+      Serial.println();
+      Serial.flush();
     }
     
+    // AES ciphering
+    aes128_enc_single(key, &nrf);
+    
+    if( DEBUG )
+    {
+      Serial.print(F("Cipher:"));      
+      PrintHex8((uint8_t*)&nrf, sizeof(PayloadTX));
+      Serial.println();
+      Serial.flush();
+    }
+    
+    //
+    // Data sender
+    //
+
+    // First, stop listening so we can talk.
+    radio.stopListening();
+        
     radio.write(&nrf, sizeof(PayloadTX));
 
     // Now, continue listening now the goal is to get some data back as ACK
@@ -345,6 +372,7 @@ void loop(void)
     
     // Stop listening
     radio.stopListening();
+    
   }
   
   //
@@ -530,5 +558,14 @@ void do_sleep(void)
   //sbi(ADCSRA, ADEN);                   // Enable ADC
 }
 
-
+// Function for debug
+void PrintHex8(uint8_t *data, uint8_t length) // prints 8-bit data in hex with leading zeroes
+{
+  Serial.print("0x"); 
+  for (int i=0; i<length; i++) { 
+    if (data[i]<0x10) {Serial.print("0");} 
+    Serial.print(data[i],HEX); 
+    Serial.print(" "); 
+  }
+}
 
