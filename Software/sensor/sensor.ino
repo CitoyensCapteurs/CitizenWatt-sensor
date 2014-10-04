@@ -180,7 +180,7 @@ void setup(void)
   radio.setRetries(15, 15);
 
   // Reduce payload size to improve reliability
-  radio.setPayloadSize(8);
+  radio.setPayloadSize(16);
 
   // Set the datarate
   radio.setDataRate(NRF_SPEED);
