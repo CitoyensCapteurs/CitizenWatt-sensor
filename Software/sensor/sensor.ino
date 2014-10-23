@@ -30,7 +30,7 @@ uint64_t pipes[2] = { 0xE056D446D0LL, 0xF0F0F0F0D2LL };
 uint8_t key[] = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15};
 
 // Calibration factor for the intensity
-double ICAL = 90.9;
+double ICAL = 85.0;
 
 // =============================================================
 
