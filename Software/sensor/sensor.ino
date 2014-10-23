@@ -163,7 +163,7 @@ void setup(void)
   }
   
   // Init EnergyMonitor, with calibration factor for R1 = 22 Ohms
-  emon1.current(0, 82.0);//90.9);
+  emon1.current(0, ICAL);
 
   digitalWrite(RED_LED_PIN, LOW);
   digitalWrite(GREEN_LED_PIN, LOW);
