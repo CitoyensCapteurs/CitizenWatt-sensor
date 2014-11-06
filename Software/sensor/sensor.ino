@@ -7,7 +7,7 @@
 #include <avr/sleep.h>
 #include <avr/power.h>
 #include <nRF24L01.h>
-#include <RF24.h>      // https://github.com/stanleyseow/RF24
+#include <RF24.h>      // https://github.com/stanleyseow/RF24/tree/2a1a4e6e27056844a3bc419d65b8a2d4e0f1770e
 #include "printf.h"
 #include <EmonLib.h>   // https://github.com/openenergymonitor/EmonLib
 #include <AESLib.h>    // https://github.com/DavyLandman/AESLib
