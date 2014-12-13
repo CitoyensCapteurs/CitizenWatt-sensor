@@ -37,7 +37,7 @@ double ICAL = 85.0;
 // Speed for the nrf module
 // RF24_250KBPS / RF24_1MBPS / RF24_2MBPS
 // Reduce it to improve reliability
-rf24_datarate_e NRF_SPEED = RF24_1MBPS;
+rf24_datarate_e NRF_SPEED = RF24_250KBPS;
 
 // Channel for the nrf module
 // 76 is default safe channel in RF24
